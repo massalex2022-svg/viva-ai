@@ -10,3 +10,9 @@
 .consent-line input{width:18px;height:18px;flex-shrink:0;accent-color:#88e4d9;margin-top:1px}
 .chat-bottom #generated-audio{margin:0 0 11px}
 @media(max-width:500px){.voice-section{padding:12px}.voice-tabs .mode b{font-size:12px}.voice-tabs .mode small{font-size:9px}}
+
+/* VIVA AI 1.2 · voce naturale Gemini */
+.voice-standard-panel{padding:13px 2px 2px}
+.voice-standard-panel .form-grid{gap:10px}
+.voice-standard-panel .field{font-size:11px}
+@media(max-width:500px){.voice-standard-panel .form-grid{grid-template-columns:1fr}}
