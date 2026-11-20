@@ -6,7 +6,7 @@ const state = {
   token: sessionStorage.getItem('viva_token') || '',
   messages: [], active: false, busy: false, recognition: null,
   voices: [], lastAgentMessage: '', voiceSource:'standard', voiceFile:null, voicePreviewUrl:null,
-  convertedVoiceFile:null, playingUrl:null, speechJob:0,
+  convertedVoiceFile:null, playingUrl:null, speechJob:0, voiceEngine:'gemini',
 };
 
 function status(message, error=false) {
@@ -46,7 +46,8 @@ function voiceSourceChange(next) {
   }
   $('voice-standard-panel').hidden=next!=='standard';
   $('voice-custom-panel').hidden=next!=='custom';
-  $('voice-choice').disabled=next==='custom';
+  $('voice-choice').disabled=next==='custom' || state.voiceEngine==='gemini';
+  $('ai-voice-choice').disabled=next==='custom' || state.voiceEngine==='browser';
   status(next==='standard'
     ? 'Voce standard selezionata: gratuita, tramite il browser.'
     : 'Carica una voce autorizzata. Per generare risposte con quella voce serve un motore Chatterbox attivo.');
@@ -123,7 +124,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'La foto rimane fissa. Gemini risponde a domande diverse e il browser legge le risposte a voce. Questa NON è una vera animazione labiale.'
+    ? 'La foto rimane fissa. Gemini risponde e, se disponibile, genera una voce AI naturale. Questa NON è una vera animazione labiale.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -179,6 +180,34 @@ function chooseVoice() {
   const candidates = preference==='male' ? /(diego|cosimo|luca|marco|male|uomo|gianni|giorgio)/i : /(elsa|isabella|alice|female|donna|paola|lucia)/i;
   return italian.find(v=>candidates.test(v.name)) || italian[0] || null;
 }
+
+function voiceEngineChange(next) {
+  if(state.active || state.busy) return status('Termina la conversazione prima di cambiare il motore vocale.',true);
+  state.voiceEngine=next==='browser'?'browser':'gemini';
+  $('voice-choice').disabled=state.voiceSource==='custom'||state.voiceEngine==='gemini';
+  $('ai-voice-choice').disabled=state.voiceSource==='custom'||state.voiceEngine==='browser';
+  status(state.voiceEngine==='gemini'?'Voce Gemini selezionata. Richiede un Worker aggiornato e quota gratuita disponibile.':'Voce Chrome selezionata. Puoi iniziare subito.');
+}
+function speakBrowser(text) {
+  if(!('speechSynthesis' in window)) throw Error('Sintesi vocale non disponibile in questo browser.');
+  const utterance=new SpeechSynthesisUtterance(text);
+  utterance.lang='it-IT';utterance.rate=.95;utterance.pitch=$('voice-choice').value==='male'?.87:1.05;
+  const voice=chooseVoice();if(voice) utterance.voice=voice;
+  utterance.onstart=()=>$('audio-state').textContent='◉ Sta parlando';
+  utterance.onend=()=>$('audio-state').textContent='● In ascolto';
+  utterance.onerror=()=>$('audio-state').textContent='● Audio non disponibile';
+  speechSynthesis.speak(utterance);
+}
+async function playAudioBlob(blob,myJob) {
+  if(myJob!==state.speechJob) return;
+  state.playingUrl=URL.createObjectURL(blob);
+  const audio=$('generated-audio');
+  audio.src=state.playingUrl;audio.hidden=false;
+  audio.onended=()=>$('audio-state').textContent='● In ascolto';
+  audio.onplay=()=>$('audio-state').textContent='◉ Sta parlando';
+  try { await audio.play(); }
+  catch {status('Audio generato. Premi ▶ nel riproduttore sotto la chat per ascoltarlo.');}
+}
 async function speak(text) {
   if(state.mode!=='basic') return;
   stopSpokenAudio();
@@ -194,24 +223,30 @@ async function speak(text) {
     form.set('text',text.slice(0,600));
     form.set('consent','true');
     const blob=await apiVoice(form);
-    if(myJob!==state.speechJob) return;
-    state.playingUrl=URL.createObjectURL(blob);
-    const audio=$('generated-audio');
-    audio.src=state.playingUrl;audio.hidden=false;
-    audio.onended=()=>{$('audio-state').textContent='● In ascolto';};
-    audio.onplay=()=>{$('audio-state').textContent='◉ Sta parlando';};
-    try { await audio.play(); }
-    catch {status('Audio generato. Premi ▶ nel riproduttore sotto la chat per ascoltarlo.');}
+    await playAudioBlob(blob,myJob);
     return;
   }
-  if(!('speechSynthesis' in window)) throw Error('Sintesi vocale non disponibile in questo browser.');
-  const utterance=new SpeechSynthesisUtterance(text);
-  utterance.lang='it-IT';utterance.rate=.95;utterance.pitch=$('voice-choice').value==='male'?.87:1.05;
-  const voice=chooseVoice();if(voice) utterance.voice=voice;
-  utterance.onstart=()=>$('audio-state').textContent='◉ Sta parlando';
-  utterance.onend=()=>$('audio-state').textContent='● In ascolto';
-  utterance.onerror=()=>$('audio-state').textContent='● Audio non disponibile';
-  speechSynthesis.speak(utterance);
+  if(state.voiceEngine==='gemini') {
+    $('audio-state').textContent='◉ Creo la voce...';
+    try {
+      const normalized=text.replace(/\*\*/g,'').trim().slice(0,1600);
+      const result=await api('/api/tts',{text:normalized,voice:$('ai-voice-choice').value});
+      if(myJob!==state.speechJob)return;
+      if(!result.audio || result.mimeType!=='audio/wav') throw Error('Il servizio non ha prodotto un WAV valido.');
+      const decoded=atob(result.audio);
+      const array=new Uint8Array(decoded.length);
+      for(let i=0;i<decoded.length;i++) array[i]=decoded.charCodeAt(i);
+      await playAudioBlob(new Blob([array],{type:'audio/wav'}),myJob);
+      return;
+    } catch(err) {
+      if(myJob!==state.speechJob)return;
+      status(`Voce Gemini non disponibile: ${err.message}. Uso temporaneamente la voce Chrome.`,true);
+      $('audio-state').textContent='● Voce Chrome alternativa';
+      speakBrowser(text);
+      return;
+    }
+  }
+  speakBrowser(text);
 }
 function refreshVoices() { if ('speechSynthesis' in window) state.voices=speechSynthesis.getVoices(); }
 function setBusy(yes) {
@@ -362,6 +397,7 @@ $('photo-input').addEventListener('change',uploadPhoto);
 $('voice-standard').addEventListener('click',()=>voiceSourceChange('standard'));
 $('voice-custom').addEventListener('click',()=>voiceSourceChange('custom'));
 $('voice-file').addEventListener('change',uploadVoice);
+$('voice-engine').addEventListener('change',(e)=>voiceEngineChange(e.target.value));
 $('avatar-name').addEventListener('input',updateName);
 $('mode-basic').addEventListener('click',()=>modeChange('basic'));
 $('mode-live').addEventListener('click',()=>modeChange('live'));
