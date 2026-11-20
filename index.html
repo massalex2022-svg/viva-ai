@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1223">
+  <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
+  <title>VIVA AI 1.1 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.1</small></div></div>
+      <div class="top-right"><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
+    </header>
+    <main class="workspace">
+      <section class="studio-panel">
+        <div class="section-heading"><div><span class="eyebrow">STUDIO AVATAR</span><h1>Dai vita a una fotografia.</h1><p>Scegli un volto, una voce e una personalità. Poi comincia a parlare.</p></div></div>
+        <div class="photo-frame" id="photo-frame">
+          <div id="avatar-placeholder" class="avatar-placeholder"><div class="placeholder-glow"></div><div class="avatar-symbol">◉</div><p>La tua fotografia comparirà qui</p><span>JPG o PNG · un volto ben visibile</span></div>
+          <img id="avatar-photo" alt="Fotografia dell'avatar selezionato" hidden>
+          <video id="agent-video" autoplay playsinline hidden></video>
+          <div class="live-tag" id="live-tag" hidden>● VIDEO LIVE</div>
+          <div class="frame-bottom"><span id="avatar-state">Nessuna fotografia</span><span id="audio-state" aria-live="polite">● In attesa</span></div>
+        </div>
+        <label class="upload-button" for="photo-input"><span>＋</span> Carica la fotografia <span class="subtle">dal tuo dispositivo</span></label>
+        <input id="photo-input" type="file" accept="image/jpeg,image/png" hidden>
+        <div class="form-grid">
+          <label class="field">Nome dell’avatar<input id="avatar-name" maxlength="50" value="Alex" placeholder="Es. Alex"></label>
+          <label class="field">Voce browser<select id="voice-choice"><option value="male">Maschile</option><option value="female">Femminile</option></select></label>
+        </div>
+        <section class="voice-section" aria-label="Identità vocale">
+          <span class="eyebrow">SCEGLI COME PARLA L'AVATAR</span>
+          <div class="mode-tabs voice-tabs" role="group" aria-label="Tipo di voce">
+            <button class="mode active" id="voice-standard" type="button" aria-pressed="true"><b>Voce standard</b><small>Gratis · disponibile subito</small></button>
+            <button class="mode" id="voice-custom" type="button" aria-pressed="false"><b>Carica la voce</b><small>Campione audio autorizzato</small></button>
+          </div>
+          <div id="voice-standard-panel" class="voice-help">Utilizza le voci italiane offerte dal dispositivo. Non riproduce la voce della persona ritratta.</div>
+          <div id="voice-custom-panel" class="voice-custom-panel" hidden>
+            <label class="upload-button voice-upload" for="voice-file"><span>♫</span> Carica audio WAV o MP3 <span class="subtle">max 8 MB</span></label>
+            <input id="voice-file" type="file" accept=".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg" hidden>
+            <div class="voice-sample-info" id="voice-sample-info">Scegli un campione di voce chiaro, senza musica, preferibilmente di 6–15 secondi.</div>
+            <audio id="voice-preview" controls preload="metadata" hidden aria-label="Ascolta il campione vocale"></audio>
+            <label class="consent-line"><input type="checkbox" id="voice-consent"><span>Dichiaro che la voce è mia o che la persona mi ha autorizzato esplicitamente a riprodurla con un'AI. Non la userò per ingannare o impersonare altre persone.</span></label>
+            <div class="voice-help" id="voice-clone-status">La clonazione richiede un motore vocale Chatterbox collegato al Worker. Il caricamento e l'ascolto del campione sono già disponibili gratuitamente.</div>
+          </div>
+        </section>
+        <label class="field personality-field">Come deve comportarsi?<textarea id="personality" rows="3" maxlength="900" placeholder="Es. cordiale, curioso, brillante e spiritoso">Sei un assistente amichevole, competente e naturale. Rispondi in italiano, in maniera chiara e non ripetitiva. Ricorda ciò che è stato appena detto nella conversazione.</textarea></label>
+        <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Voce AI</b><small>Foto fissa · Gemini</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
+        <div class="mode-info" id="mode-info">La foto rimane fissa. Le risposte sono generate da Gemini e lette con una voce italiana disponibile sul browser.</div>
+        <button class="primary" id="start-button" type="button">Avvia conversazione <span>↗</span></button>
+        <button class="ghost danger" id="stop-button" type="button" hidden>Termina conversazione</button>
+        <p class="fineprint">Carica solo foto e campioni vocali che puoi usare legittimamente. L’avatar è generato dall’AI e non rappresenta dichiarazioni autentiche della persona ritratta.</p>
+      </section>
+      <section class="chat-panel" aria-label="Conversazione">
+        <div class="chat-header"><div><span class="eyebrow">CONVERSAZIONE</span><h2>Parla con <span id="chat-name">Alex</span></h2><p id="chat-subtitle">Una conversazione, infinite domande.</p></div><button class="ghost icon-button" id="clear-chat" title="Azzera la conversazione" type="button">↺</button></div>
+        <div class="chat-scroll" id="chat-scroll" role="log" aria-live="polite" aria-relevant="additions">
+          <div class="intro-bubble"><div class="intro-icon">✦</div><h3>Comincia quando vuoi</h3><p>Carica una foto, imposta l’avatar e premi <b>Avvia conversazione</b>. Puoi scrivere oppure parlare usando il microfono.</p><div class="suggestions"><button type="button" data-prompt="Ciao! Presentati e dimmi cosa sai fare.">Presentati</button><button type="button" data-prompt="Raccontami una curiosità sorprendente.">Sorprendimi</button><button type="button" data-prompt="Facciamo una conversazione naturale in italiano.">Parliamo</button></div></div>
+        </div>
+        <div class="chat-bottom"><audio id="generated-audio" controls hidden aria-label="Riproduci la risposta generata con la voce personalizzata"></audio><div id="status-message" class="status-message" role="status">Configura Cloudflare nelle impostazioni per ottenere risposte AI.</div><form id="chat-form" class="composer"><button id="mic-button" type="button" aria-label="Parla al microfono" title="Premi e parla">🎙</button><input id="message-input" type="text" autocomplete="off" placeholder="Scrivi la tua domanda..." maxlength="2500"><button id="send-button" type="submit" aria-label="Invia messaggio">➤</button></form><p class="composer-help">Microfono: premi e parla · Premi Invio per inviare</p></div>
+      </section>
+    </main>
+  </div>
+  <div id="settings-overlay" class="overlay" hidden>
+    <section id="settings-panel" class="settings-card" role="dialog" aria-modal="true" aria-labelledby="settings-heading">
+      <div class="settings-heading"><div><span class="eyebrow">COLLEGAMENTO SICURO</span><h2 id="settings-heading">Impostazioni Cloudflare</h2></div><button id="settings-close" class="ghost icon-button" aria-label="Chiudi impostazioni">✕</button></div>
+      <p>Le chiavi di Gemini e D-ID vanno inserite come <b>Secrets nel Worker Cloudflare</b>, non in questa pagina.</p>
+      <label class="field">Indirizzo pubblico del Worker<input id="worker-url" type="url" placeholder="https://viva-ai-api.tuoaccount.workers.dev" spellcheck="false"></label>
+      <label class="field">Codice di accesso al Worker<input id="access-token" type="password" placeholder="Il valore di VIVA_ACCESS_TOKEN" autocomplete="off"></label>
+      <div class="settings-actions"><button class="secondary" id="test-worker" type="button">Verifica collegamento</button><button class="primary" id="save-settings" type="button">Salva</button></div>
+      <div id="settings-result" class="settings-result" role="status"></div>
+      <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
+    </section>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
