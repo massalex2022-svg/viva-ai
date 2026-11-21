@@ -7,7 +7,7 @@ let landmarkerPromise;
 function getLandmarker() {
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
-      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + VISION_VERSION + '/+esm');
+      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + VISION_VERSION + '/vision_bundle.mjs');
       const files = await vision.FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + VISION_VERSION + '/wasm'
       );
@@ -28,11 +28,13 @@ export class PhotoAvatarMotion {
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.browserSpeaking=false; this.browserStart=0;
+    this.demoUntil=0;this.demoStart=0;this.manualPending=false;
     this.analyser=null; this.audioContext=null; this.samples=null;
     audio.addEventListener('play', () => { void this.onAudioPlay(); });
     audio.addEventListener('pause', () => this.onAudioStop());
     audio.addEventListener('ended', () => this.onAudioStop());
     this.paint= this.paint.bind(this);
+    this.photo.addEventListener('click',ev=>this.placeManualMouth(ev));
   }
   isVisible() { return this.ready && this.enabled && this.mode==='basic'; }
   updateDisplay() {
@@ -42,7 +44,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null; this.onAudioStop();
+    this.ready=false; this.mouth=null; this.manualPending=false; this.photo.classList.remove('select-mouth'); this.onAudioStop();
     this.updateDisplay();
     if (!this.enabled) { this.status('Animazione disattivata: attivala per rilevare il volto.'); return; }
     try {
@@ -78,8 +80,50 @@ export class PhotoAvatarMotion {
     } catch (e) {
       if(seq!==this.seq)return;
       this.ready=false;this.updateDisplay();
-      this.status('Animazione non disponibile: '+(e?.message||'errore del rilevamento')+' La conversazione resta attiva.');
+      this.status('Rilevamento automatico non riuscito: '+(e?.message||'errore del rilevamento')+' Puoi premere «Indica la bocca sulla foto».');
     }
+  }
+  pickMouth() {
+    if(!this.photo.src || !this.photo.naturalWidth){
+      this.status('Prima carica una foto con il volto ben visibile.');return;
+    }
+    this.reset();
+    this.ready=false;
+    this.manualPending=true;
+    this.updateDisplay();
+    this.photo.classList.add('select-mouth');
+    this.status('Clicca esattamente al centro della bocca nella fotografia. Poi usa «Prova il movimento».');
+  }
+  placeManualMouth(ev) {
+    if(!this.manualPending || !this.enabled)return;
+    const nw=this.photo.naturalWidth,nh=this.photo.naturalHeight;
+    if(!nw||!nh)return;
+    const w=Math.min(nw,900),h=Math.round(nh*w/nw);
+    const rect=this.photo.getBoundingClientRect();
+    const scale=Math.max(rect.width/nw,rect.height/nh);
+    const renderedW=nw*scale,renderedH=nh*scale;
+    const offsetX=(rect.width-renderedW)*.5;
+    const offsetY=(rect.height-renderedH)*.3; // object-position: center 30%
+    const x=(ev.clientX-rect.left-offsetX)/scale*w/nw;
+    const y=(ev.clientY-rect.top-offsetY)/scale*h/nh;
+    if(x<0||y<0||x>=w||y>=h){this.status('Clicca all’interno del volto, al centro delle labbra.');return;}
+    this.canvas.width=w;this.canvas.height=h;
+    this.source=document.createElement('canvas');
+    this.source.width=w;this.source.height=h;
+    this.source.getContext('2d').drawImage(this.photo,0,0,w,h);
+    const width=clamp(w*.13,22,Math.max(23,w*.2));
+    this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
+    this.ready=true;this.manualPending=false;this.photo.classList.remove('select-mouth');
+    this.draw(0);this.updateDisplay();
+    this.status('Bocca posizionata manualmente. Premi «Prova il movimento»; poi ascolta una risposta Gemini.');
+  }
+  testMotion() {
+    if(!this.enabled){this.status('Attiva prima «Anima le labbra».');return;}
+    if(!this.ready){this.status('Il volto non è pronto: premi «Indica la bocca sulla foto», clicca sulla bocca e riprova.');return;}
+    this.demoStart=performance.now();
+    this.demoUntil=this.demoStart+3200;
+    this.status('TEST: osserva le labbra per alcuni secondi. Se si muovono, prova una risposta Gemini.');
+    this.run();
   }
   setMode(mode) {
     this.mode=mode;
@@ -88,7 +132,7 @@ export class PhotoAvatarMotion {
   }
   setEnabled(value) {
     this.enabled=Boolean(value);
-    if(!this.enabled)this.reset();
+    if(!this.enabled){this.reset();this.manualPending=false;this.photo.classList.remove('select-mouth');}
     if(this.enabled && !this.ready && this.photo.src) void this.loadPhoto();
     else this.updateDisplay();
   }
@@ -122,7 +166,7 @@ export class PhotoAvatarMotion {
     this.run();
   }
   onAudioStop(){
-    if(!this.browserSpeaking)this.reset();
+    if(!this.browserSpeaking && this.demoUntil<performance.now())this.reset();
   }
   run(){
     if(!this.isVisible()||this.frame)return;
@@ -137,9 +181,13 @@ export class PhotoAvatarMotion {
     this.frame=0;
     if(!this.isVisible())return;
     const playing=!this.audio.paused && !this.audio.ended && !!this.audio.currentSrc;
-    if(!playing && !this.browserSpeaking){this.reset();return;}
+    const demo=this.demoUntil>time;
+    if(!playing && !this.browserSpeaking && !demo){this.reset();return;}
     let target=0;
-    if(playing && this.analyser && this.audioContext?.state==='running'){
+    if(demo){
+      const t=(time-this.demoStart)/1000;
+      target=clamp(.6+.38*Math.sin(t*13),.16,1);
+    } else if(playing && this.analyser && this.audioContext?.state==='running'){
       this.analyser.getByteTimeDomainData(this.samples);
       let sum=0;
       for(const x of this.samples){const d=(x-128)/128;sum+=d*d;}
