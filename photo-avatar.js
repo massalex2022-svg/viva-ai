@@ -273,7 +273,7 @@ export class PhotoAvatarMotion {
     this.run();
   }
   onAudioStop(){
-    if(!this.browserSpeaking && this.demoUntil<performance.now())this.reset();
+    if(!this.browserSpeaking && this.demoUntil<performance.now() && this.blinkStart<0)this.reset();
   }
   run(){
     if(!this.isVisible()||this.frame)return;
