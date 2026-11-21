@@ -16,3 +16,12 @@
 .voice-standard-panel .form-grid{gap:10px}
 .voice-standard-panel .field{font-size:11px}
 @media(max-width:500px){.voice-standard-panel .form-grid{grid-template-columns:1fr}}
+
+/* VIVA AI 1.3 — anteprima labbra su fotografia */
+.photo-frame #avatar-canvas{width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block}
+.photo-frame #avatar-canvas[hidden]{display:none}
+.photo-motion-settings{margin-top:16px;border:1px solid #34455f;background:#101c2e;border-radius:13px;padding:10px 14px}
+.motion-checkbox{margin:4px 0 6px}
+.motion-checkbox b{display:block;color:#e7f3ff;font-size:12px}
+.motion-checkbox small{display:block;margin-top:5px;color:#a1aec4;line-height:1.5}
+#photo-motion-status{margin-top:6px}
