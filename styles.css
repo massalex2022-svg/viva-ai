@@ -51,3 +51,23 @@
 .photo-frame .face-select-prompt{position:absolute;top:12px;left:50%;transform:translateX(-50%);max-width:94%;width:max-content;padding:9px 13px;background:#092536e8;border:1px solid #91ebda;color:#e7fff9;border-radius:12px;font-size:12px;font-weight:800;text-align:center;pointer-events:none;z-index:2;box-shadow:0 4px 15px #0009;letter-spacing:.4px}
 .photo-frame .face-select-markers{position:absolute;inset:0;pointer-events:none}
 .photo-frame .face-pick-marker{position:absolute;display:grid;place-items:center;width:26px;height:26px;border:2px solid #fff;border-radius:50%;background:#1b95baae;color:#fff;transform:translate(-50%,-50%);font-size:12px;font-weight:800;box-shadow:0 0 0 3px #023d49bb}
+
+/* VIVA AI 1.4.4 — sovrapposizione diagnostica indipendente dal canvas */
+.photo-frame .eye-diagnostic-overlay{position:absolute;inset:0;z-index:11;pointer-events:none;overflow:hidden}
+.photo-frame .eye-diagnostic-overlay[hidden]{display:none!important}
+.eye-diagnostic-marker{
+  position:absolute;display:grid;place-items:center;
+  color:#e7fff6;background:#0c363b3a;border:3px solid #63ff9a;
+  border-radius:50%;transform:translate(-50%,-50%);
+  font-size:12px;font-weight:900;box-shadow:0 0 0 2px #0c1927a8,0 0 18px #63ff9a6c
+}
+.eye-diagnostic-marker::after{
+  content:"";position:absolute;left:12%;right:12%;top:46%;
+  border-top:4px solid #ffe392;filter:drop-shadow(0 1px 1px #173332);
+  transform:scaleY(.15);
+  animation:eye-diagnostic-shutter 1.45s ease-in-out 2;
+}
+@keyframes eye-diagnostic-shutter{
+  0%,100%{top:42%;transform:scaleY(.1);opacity:.25}
+  35%,55%{top:52%;transform:scaleY(2);opacity:1}
+}
