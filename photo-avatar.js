@@ -87,6 +87,7 @@ export class PhotoAvatarMotion {
     if(!this.photo.src || !this.photo.naturalWidth){
       this.status('Prima carica una foto con il volto ben visibile.');return;
     }
+    ++this.seq; // Ignora eventuale riconoscimento automatico ancora in corso.
     this.reset();
     this.ready=false;
     this.manualPending=true;
