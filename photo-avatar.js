@@ -1,4 +1,4 @@
-/* VIVA AI 1.4.2 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 1.4.3 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -29,7 +29,7 @@ export class PhotoAvatarMotion {
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=.75; this.freq=null;
     this.eyes=[];this.blinkEnabled=true;this.headEnabled=false;
-    this.blinkStart=-1;this.blinkTimer=null;this.blinkAmount=0;
+    this.blinkStart=-1;this.blinkTimer=null;this.blinkAmount=0;this.blinkDuration=245;
     this.browserSpeaking=false; this.browserStart=0;
     this.demoUntil=0;this.demoStart=0;this.manualPending=false;
     this.eyePending=false;this.eyeClicks=[];this.blinkTestTimer=null;
@@ -48,7 +48,7 @@ export class PhotoAvatarMotion {
       else if(this.manualPending)this.placeManualMouth(ev);
     });
   }
-  isVisible() { return this.ready && this.enabled && this.mode==='basic'; }
+  isVisible() { return this.enabled && this.mode==='basic' && !!this.source && (!!this.mouth || this.eyes.length>0); }
   updateDisplay() {
     const editing=this.manualPending||this.eyePending;
     const showingCanvas=this.isVisible()&&!editing;
@@ -206,12 +206,10 @@ export class PhotoAvatarMotion {
     this.eyes=[first,second].map(p=>({cx:p.x,cy:p.y,width:eyeWidth,height:eyeWidth*.20,angle}));
     this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');
-    this.ready=Boolean(this.mouth);
+    this.ready=true;
     this.updateDisplay();
-    if(this.ready){this.draw(this.level,this.shape);this.scheduleBlink();}
-    this.status(this.ready
-      ?'Due occhi posizionati! Ora premi «Prova battito palpebre».'
-      :'Occhi posizionati! Adesso premi «Indica la bocca sulla foto» e clicca sulla bocca; poi prova il battito.');
+    this.draw(this.level,this.shape);this.scheduleBlink();
+    this.status('Occhi posizionati! Premi «Prova battito palpebre»: ora funziona anche senza selezionare la bocca.');
   }
   testMotion() {
     if(!this.enabled){this.status('Attiva prima «Anima le labbra».');return;}
@@ -247,29 +245,37 @@ export class PhotoAvatarMotion {
   scheduleBlink() {
     if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
     this.blinkTimer=null;
-    if(!this.blinkEnabled||!this.enabled||!this.ready||!this.eyes.length||this.mode!=='basic')return;
+    if(!this.blinkEnabled||!this.isVisible()||!this.eyes.length)return;
     this.blinkTimer=setTimeout(()=>{
       this.blinkTimer=null;
       if(document.hidden){this.scheduleBlink();return;}
       this.startBlink();
     },2600+Math.random()*3700);
   }
-  startBlink() {
+  startBlink(duration=245) {
     if(!this.isVisible()||!this.blinkEnabled||!this.eyes.length)return false;
+    this.blinkDuration=duration;
     this.blinkStart=performance.now();
+    this.blinkAmount=0;
     this.run();
     return true;
   }
   testBlink() {
     if(!this.blinkEnabled){this.status('Attiva prima «Battito palpebre».');return;}
-    if(!this.ready || !this.eyes.length){
-      this.status('Occhi non disponibili. Premi «Indica gli occhi», poi clicca al centro dei due occhi.');
+    if(!this.isVisible()||this.eyes.length!==2){
+      this.status('Per il test seleziona entrambi gli occhi sulla foto con «Indica gli occhi», poi riprova.');
       return;
     }
-    this.status('TEST PALPEBRE: osserva gli occhi. Verranno eseguiti due battiti ravvicinati.');
-    this.startBlink();
+    // Due chiusure volutamente lente, per diagnosticarle prima di tornare al ritmo naturale.
+    this.status('TEST LENTO: osserva gli occhi per 3 secondi. Le palpebre devono chiudersi e riaprirsi due volte.');
     if(this.blinkTestTimer!==null)clearTimeout(this.blinkTestTimer);
-    this.blinkTestTimer=setTimeout(()=>{this.blinkTestTimer=null;this.startBlink();},650);
+    if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
+    this.blinkTestTimer=null;this.blinkTimer=null;
+    this.startBlink(1050);
+    this.blinkTestTimer=setTimeout(()=>{
+      this.blinkTestTimer=null;
+      this.startBlink(1050);
+    },1480);
   }
   setBlinkEnabled(value) {
     this.blinkEnabled=Boolean(value);
@@ -287,25 +293,25 @@ export class PhotoAvatarMotion {
       ctx.save();
       ctx.translate(eye.cx,eye.cy);
       ctx.rotate(eye.angle);
-      const rx=eye.width*.47,half=eye.height*.83;
+      const rx=eye.width*.49,half=eye.height*1.16;
       // Maschera locale e texture ricavata dalla pelle sopra la palpebra.
       // Resta una simulazione 2D, non una generazione 3D del volto.
       ctx.beginPath();
       ctx.ellipse(0,0,rx,half,0,0,Math.PI*2);
       ctx.clip();
-      ctx.globalAlpha=Math.min(.96,blink*.96);
+      ctx.globalAlpha=Math.min(1,blink*1.04);
       ctx.rotate(-eye.angle);
       ctx.translate(-eye.cx,-eye.cy);
       const x=Math.max(0,eye.cx-eye.width*.52);
       const drawWidth=Math.min(this.canvas.width-x,eye.width*1.04);
-      const sampleTop=Math.max(0,eye.cy-eye.height*1.45);
-      const skinBand=Math.max(1.5,eye.height*.38);
-      const targetTop=eye.cy-eye.height*.9;
-      const targetH=eye.height*1.8;
+      const sampleTop=Math.max(0,eye.cy-eye.height*2.6);
+      const skinBand=Math.max(2,eye.height*.8);
+      const targetTop=eye.cy-eye.height*1.25;
+      const targetH=eye.height*2.5;
       ctx.drawImage(this.source,x,sampleTop,drawWidth,skinBand,x,targetTop,drawWidth,targetH);
       ctx.restore();
       // Linea della palpebra chiusa (molto sottile, senza oscurare l'occhio).
-      if(blink>.56){
+      if(blink>.42){
         ctx.save();ctx.translate(eye.cx,eye.cy);ctx.rotate(eye.angle);
         ctx.beginPath();
         ctx.moveTo(-rx*.9,0);
@@ -418,7 +424,7 @@ export class PhotoAvatarMotion {
     this.shape+=(shapeTarget-this.shape)*.17;
     if(this.level<.035)this.level=0;
     if(blinking){
-      const phase=(time-this.blinkStart)/245;
+      const phase=(time-this.blinkStart)/this.blinkDuration;
       if(phase>=1){
         this.blinkStart=-1;this.blinkAmount=0;this.scheduleBlink();
       }else{
@@ -431,7 +437,7 @@ export class PhotoAvatarMotion {
     this.frame=requestAnimationFrame(this.paint);
   }
   draw(openness,shape=.48) {
-    if(!this.source||!this.mouth)return;
+    if(!this.source)return;
     const ctx=this.ctx, m=this.mouth, w=this.canvas.width, h=this.canvas.height;
     ctx.clearRect(0,0,w,h);
     ctx.save();
@@ -445,8 +451,8 @@ export class PhotoAvatarMotion {
     }
     ctx.drawImage(this.source,0,0);
     this.paintEyes(ctx,this.blinkAmount);
-    const amount=clamp(openness*this.intensity,0,1);
-    if(amount<.07){ctx.restore();return;}
+    const amount=m?clamp(openness*this.intensity,0,1):0;
+    if(amount<.07||!m){ctx.restore();return;}
 
     const width=m.width;
     const x=m.cx;
