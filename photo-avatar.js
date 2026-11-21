@@ -270,7 +270,8 @@ export class PhotoAvatarMotion {
     if(!this.diagOverlay||this.eyes.length!==2||!this.photo.naturalWidth||!this.source)return false;
     this.clearEyeDiagnosis();
     // Stesse dimensioni del ritaglio object-fit:cover, object-position:center 30%.
-    const rect=this.diagOverlay.getBoundingClientRect();
+    // L'overlay è inizialmente nascosto: misuriamo la cornice, sempre visibile.
+    const rect=this.diagOverlay.parentElement.getBoundingClientRect();
     const w=this.canvas.width,h=this.canvas.height;
     if(!rect.width||!rect.height||!w||!h)return false;
     const scale=Math.max(rect.width/w,rect.height/h);
