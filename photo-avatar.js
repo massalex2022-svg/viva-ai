@@ -1,4 +1,4 @@
-/* VIVA AI 1.4.1 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 1.4.2 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -39,12 +39,40 @@ export class PhotoAvatarMotion {
     audio.addEventListener('ended', () => this.onAudioStop());
     this.paint= this.paint.bind(this);
     this.photo.addEventListener('click',ev=>{if(this.eyePending)this.placeManualEye(ev);else this.placeManualMouth(ev);});
+    this.selectLayer=document.getElementById('face-select-layer');
+    this.selectPrompt=document.getElementById('face-select-prompt');
+    this.selectMarkers=document.getElementById('face-select-markers');
+    this.selectLayer.addEventListener('pointerdown',ev=>{
+      ev.preventDefault();
+      if(this.eyePending)this.placeManualEye(ev);
+      else if(this.manualPending)this.placeManualMouth(ev);
+    });
   }
   isVisible() { return this.ready && this.enabled && this.mode==='basic'; }
   updateDisplay() {
-    const showingCanvas=this.isVisible()&&!this.manualPending&&!this.eyePending;
+    const editing=this.manualPending||this.eyePending;
+    const showingCanvas=this.isVisible()&&!editing;
     this.canvas.hidden=!showingCanvas;
     if(this.photo.src && this.mode==='basic')this.photo.hidden=showingCanvas;
+    const selecting=editing&&this.mode==='basic'&&this.enabled&&!!this.photo.src;
+    this.selectLayer.hidden=!selecting;
+    if(selecting){
+      this.selectPrompt.textContent=this.eyePending
+        ?(this.eyeClicks.length===0?'🎯 CLICCA SUL PRIMO OCCHIO':'🎯 CLICCA SUL SECONDO OCCHIO')
+        :'🎯 CLICCA AL CENTRO DELLA BOCCA';
+    } else {
+      this.selectMarkers.replaceChildren();
+    }
+  }
+  showMarker(ev) {
+    if(this.selectLayer.hidden)return;
+    const r=this.selectLayer.getBoundingClientRect();
+    const marker=document.createElement('span');
+    marker.className='face-pick-marker';
+    marker.style.left=((ev.clientX-r.left)/r.width*100)+'%';
+    marker.style.top=((ev.clientY-r.top)/r.height*100)+'%';
+    marker.textContent=String(this.eyeClicks.length);
+    this.selectMarkers.appendChild(marker);
   }
   async loadPhoto() {
     const seq=++this.seq;
@@ -98,7 +126,7 @@ export class PhotoAvatarMotion {
       this.status('Prima carica una foto con il volto ben visibile.');return;
     }
     ++this.seq; // Ignora eventuale riconoscimento automatico ancora in corso.
-    this.reset();this.clearBlink();this.eyes=[];this.eyePending=false;this.eyeClicks=[];
+    this.reset();this.clearBlink();this.eyePending=false;this.eyeClicks=[];
     this.ready=false;
     this.manualPending=true;
     this.updateDisplay();
@@ -131,33 +159,45 @@ export class PhotoAvatarMotion {
     this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
     this.ready=true;this.manualPending=false;this.photo.classList.remove('select-mouth');
     this.draw(0);this.updateDisplay();
-    this.status('Bocca impostata manualmente. Per i battiti premi «Indica gli occhi» e clicca su entrambi.');
+    if(this.eyes.length)this.scheduleBlink();
+    this.status(this.eyes.length===2
+      ?'Bocca e occhi impostati. Premi «Prova battito palpebre».'
+      :'Bocca impostata. Per i battiti premi «Indica gli occhi» e clicca su entrambi.');
   }
   pickEyes() {
     if(!this.enabled){this.status('Attiva «Anima le labbra» prima.');return;}
-    if(!this.photo.src||!this.photo.naturalWidth){this.status('Carica prima una foto con occhi visibili.');return;}
-    if(!this.ready||!this.mouth||!this.source){
-      this.status('Individua prima la bocca, automaticamente o con «Indica la bocca».');return;
-    }
+    if(!this.photo.src||!this.photo.naturalWidth){this.status('Carica prima una foto con gli occhi visibili.');return;}
+    ++this.seq; // Non permettere al riconoscimento in corso di sovrascrivere la selezione.
     this.clearBlink();this.reset();
+    if(!this.source){
+      const w=Math.min(this.photo.naturalWidth,900),h=Math.round(this.photo.naturalHeight*w/this.photo.naturalWidth);
+      this.canvas.width=w;this.canvas.height=h;
+      this.source=document.createElement('canvas');
+      this.source.width=w;this.source.height=h;
+      this.source.getContext('2d').drawImage(this.photo,0,0,w,h);
+    }
     this.manualPending=false;this.eyePending=true;this.eyeClicks=[];
     this.photo.classList.add('select-mouth');
     this.updateDisplay();
-    this.status('Selezione occhi: clicca al centro del PRIMO occhio nella foto.');
+    this.status('Mirino attivo sulla foto: clicca sul PRIMO occhio, poi sull’ALTRO.');
   }
   placeManualEye(ev) {
     if(!this.eyePending||!this.enabled)return;
     const point=this.pointFromClick(ev);
     if(!point){this.status('Clicca al centro dell’occhio dentro la foto.');return;}
     this.eyeClicks.push(point);
+    this.showMarker(ev);
     if(this.eyeClicks.length<2){
-      this.status('Primo occhio segnato. Ora clicca al centro dell’ALTRO occhio.');return;
+      this.updateDisplay();
+      this.status('Primo occhio segnato! Ora clicca al centro dell’ALTRO occhio.');return;
     }
     const [first,second]=this.eyeClicks;
     const sep=Math.hypot(first.x-second.x,first.y-second.y);
-    const photoW=this.canvas.width;
+    const photoW=Math.min(this.photo.naturalWidth,900);
     if(sep<photoW*.06){
       this.eyeClicks=[];
+      this.selectMarkers.replaceChildren();
+      this.updateDisplay();
       this.status('I due clic sono troppo vicini. Seleziona di nuovo i due occhi.');return;
     }
     const mouthWidth=this.mouth?.width||photoW*.09;
@@ -166,9 +206,12 @@ export class PhotoAvatarMotion {
     this.eyes=[first,second].map(p=>({cx:p.x,cy:p.y,width:eyeWidth,height:eyeWidth*.20,angle}));
     this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');
-    this.updateDisplay();this.draw(this.level,this.shape);
-    this.scheduleBlink();
-    this.status('Due occhi posizionati. Ora premi «Prova battito palpebre».');
+    this.ready=Boolean(this.mouth);
+    this.updateDisplay();
+    if(this.ready){this.draw(this.level,this.shape);this.scheduleBlink();}
+    this.status(this.ready
+      ?'Due occhi posizionati! Ora premi «Prova battito palpebre».'
+      :'Occhi posizionati! Adesso premi «Indica la bocca sulla foto» e clicca sulla bocca; poi prova il battito.');
   }
   testMotion() {
     if(!this.enabled){this.status('Attiva prima «Anima le labbra».');return;}
@@ -279,7 +322,7 @@ export class PhotoAvatarMotion {
   }
   setMode(mode) {
     this.mode=mode;
-    if(mode!=='basic'){this.reset();this.clearBlink();}
+    if(mode!=='basic'){this.reset();this.clearBlink();this.manualPending=false;this.eyePending=false;this.eyeClicks=[];}
     else this.scheduleBlink();
     this.updateDisplay();
   }
