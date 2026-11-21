@@ -1,3 +1,4 @@
+import { PhotoAvatarMotion } from './photo-avatar.js';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -9,6 +10,12 @@ const state = {
   convertedVoiceFile:null, playingUrl:null, speechJob:0, voiceEngine:'gemini',
 };
 
+const motion = new PhotoAvatarMotion({
+  photo: $('avatar-photo'),
+  canvas: $('avatar-canvas'),
+  audio: $('generated-audio'),
+  status: message => $('photo-motion-status').textContent=message
+});
 function status(message, error=false) {
   $('status-message').textContent = message;
   $('status-message').classList.toggle('error', error);
@@ -69,6 +76,7 @@ function uploadVoice(event) {
 }
 function stopSpokenAudio() {
   state.speechJob++;
+  motion.setBrowserSpeaking(false);
   if('speechSynthesis' in window) speechSynthesis.cancel();
   const audio=$('generated-audio');
   audio.pause(); audio.removeAttribute('src'); audio.load(); audio.hidden=true;
@@ -119,12 +127,13 @@ async function apiVoice(form) {
 function modeChange(next) {
   if (state.active || state.busy) return status('Termina la conversazione corrente prima di cambiare modalità.',true);
   state.mode = next;
+  motion.setMode(next);
   for (const [el, type] of [['mode-basic','basic'],['mode-live','live']]) {
     $(el).classList.toggle('active', type===next);
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'La foto rimane fissa. Gemini risponde e, se disponibile, genera una voce AI naturale. Questa NON è una vera animazione labiale.'
+    ? 'Anteprima gratuita: la foto anima le labbra in 2D seguendo il volume della voce AI. Non è ancora una videochiamata fotorealistica.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -143,6 +152,7 @@ async function uploadPhoto(event) {
   $('live-tag').hidden=true;
   $('avatar-state').textContent = file.name;
   status('Fotografia caricata. Scegli la modalità e avvia la conversazione.');
+  if(state.mode==='basic') void motion.loadPhoto();
 }
 function settingValues() {
   state.worker = $('worker-url').value.trim().replace(/\/+$/,'');
@@ -193,9 +203,9 @@ function speakBrowser(text) {
   const utterance=new SpeechSynthesisUtterance(text);
   utterance.lang='it-IT';utterance.rate=.95;utterance.pitch=$('voice-choice').value==='male'?.87:1.05;
   const voice=chooseVoice();if(voice) utterance.voice=voice;
-  utterance.onstart=()=>$('audio-state').textContent='◉ Sta parlando';
-  utterance.onend=()=>$('audio-state').textContent='● In ascolto';
-  utterance.onerror=()=>$('audio-state').textContent='● Audio non disponibile';
+  utterance.onstart=()=>{$('audio-state').textContent='◉ Sta parlando';motion.setBrowserSpeaking(true);};
+  utterance.onend=()=>{$('audio-state').textContent='● In ascolto';motion.setBrowserSpeaking(false);};
+  utterance.onerror=()=>{$('audio-state').textContent='● Audio non disponibile';motion.setBrowserSpeaking(false);};
   speechSynthesis.speak(utterance);
 }
 async function playAudioBlob(blob,myJob) {
@@ -377,6 +387,7 @@ async function stop() {
   if (state.manager) {try{await state.manager.disconnect();}catch{} state.manager=null;}
   const video=$('agent-video');video.pause();video.srcObject=null;video.hidden=true;
   $('avatar-photo').hidden=!state.photo;
+  motion.updateDisplay();
   $('live-tag').hidden=true;
   state.active=false;
   $('start-button').hidden=false; $('stop-button').hidden=true;
@@ -398,6 +409,7 @@ $('voice-standard').addEventListener('click',()=>voiceSourceChange('standard'));
 $('voice-custom').addEventListener('click',()=>voiceSourceChange('custom'));
 $('voice-file').addEventListener('change',uploadVoice);
 $('voice-engine').addEventListener('change',(e)=>voiceEngineChange(e.target.value));
+$('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('avatar-name').addEventListener('input',updateName);
 $('mode-basic').addEventListener('click',()=>modeChange('basic'));
 $('mode-live').addEventListener('click',()=>modeChange('live'));
