@@ -97,8 +97,7 @@ export class PhotoAvatarMotion {
     if(value){this.browserStart=performance.now();this.run();}
     else this.reset();
   }
-  async onAudioPlay(){
-    if(!this.isVisible())return;
+  armAudio() {
     try {
       if(!this.analyser) {
         const AudioCtor=window.AudioContext||window.webkitAudioContext;
@@ -112,10 +111,14 @@ export class PhotoAvatarMotion {
         this.analyser.connect(this.audioContext.destination);
         this.samples=new Uint8Array(this.analyser.fftSize);
       }
-      if(this.audioContext.state==='suspended')await this.audioContext.resume();
+      if(this.audioContext.state==='suspended')void this.audioContext.resume().catch(e=>console.warn(e));
     } catch(e) {
       console.warn('VIVA AI: analisi audio non disponibile',e);
     }
+  }
+  async onAudioPlay(){
+    if(!this.isVisible())return;
+    this.armAudio();
     this.run();
   }
   onAudioStop(){
