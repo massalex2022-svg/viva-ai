@@ -36,3 +36,11 @@
 .motion-sensitivity input{width:100%;accent-color:#8ce9df;cursor:pointer}
 .motion-sensitivity output{font-size:11px;min-width:58px;color:#98f1df;text-align:right}
 @media(max-width:500px){.motion-sensitivity{grid-template-columns:1fr auto}.motion-sensitivity input{grid-column:1/-1;grid-row:2}}
+
+/* VIVA AI 1.4 — controlli animazione palpebre e testa */
+.face-options{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}
+.face-option{background:#0d1728;border:1px solid #2a3b54;padding:10px;border-radius:10px;margin:0;min-width:0}
+.face-option b{display:block;color:#e6f5ff;font-size:11px}
+.face-option small{display:block;margin-top:3px;color:#a5b5cc;font-size:10px;line-height:1.45}
+.face-option input{flex:0 0 auto}
+@media(max-width:550px){.face-options{grid-template-columns:1fr}}
