@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 1.3.2 · Il tuo avatar intelligente</title>
+  <title>VIVA AI 1.4 · Il tuo avatar intelligente</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.3.2</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.4</small></div></div>
       <div class="top-right"><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -65,20 +65,31 @@
         </section>
         <label class="field personality-field">Come deve comportarsi?<textarea id="personality" rows="3" maxlength="900" placeholder="Es. cordiale, curioso, brillante e spiritoso">Sei un assistente amichevole, competente e naturale. Rispondi in italiano, in maniera chiara e non ripetitiva. Ricorda ciò che è stato appena detto nella conversazione.</textarea></label>
         <div class="photo-motion-settings">
-          <label class="consent-line motion-checkbox"><input type="checkbox" id="photo-motion-enabled" checked><span><b>Anima le labbra · prova gratuita</b><small>Movimento 2D dalla foto, sincronizzato al volume della voce Gemini. Non è ancora un video fotorealistico.</small></span></label>
+          <label class="consent-line motion-checkbox"><input type="checkbox" id="photo-motion-enabled" checked><span><b>Anima le labbra · prova gratuita</b><small>Bocca sincronizzata alla voce Gemini; le palpebre possono muoversi in modo indipendente. È ancora un’animazione 2D.</small></span></label>
           <div class="voice-help" id="photo-motion-status" role="status">Carica un ritratto frontale per preparare l'animazione.</div>
+          <div class="face-options">
+            <label class="consent-line face-option">
+              <input type="checkbox" id="blink-enabled" checked>
+              <span><b>Battito delle palpebre</b><small>Movimento occasionale degli occhi (se rilevati nella foto)</small></span>
+            </label>
+            <label class="consent-line face-option">
+              <input type="checkbox" id="head-enabled">
+              <span><b>Micro inclinazione della testa</b><small>Sperimentale · disattivata per evitare movimenti artificiali</small></span>
+            </label>
+          </div>
           <label class="motion-sensitivity" for="motion-intensity">
             <span>Intensità dell'animazione</span>
             <input id="motion-intensity" type="range" min="0.4" max="1.2" step="0.1" value="0.7">
             <output id="motion-intensity-label" for="motion-intensity">Delicata</output>
           </label>
           <div class="motion-buttons">
-            <button class="ghost" type="button" id="motion-test">▶ Prova il movimento</button>
+            <button class="ghost" type="button" id="motion-test">▶ Prova le labbra</button>
+            <button class="ghost" type="button" id="blink-test">◉ Prova battito palpebre</button>
             <button class="ghost" type="button" id="motion-pick">◎ Indica la bocca sulla foto</button>
           </div>
         </div>
         <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Voce AI + labbra 2D</b><small>Foto animata · Gemini</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
-        <div class="mode-info" id="mode-info">La foto può animare la bocca in 2D mentre Gemini parla. Non è ancora video AI fotorealistico.</div>
+        <div class="mode-info" id="mode-info">La foto anima le labbra e, se il volto è rilevato, può simulare battiti di palpebre. Non è un video AI fotorealistico.</div>
         <button class="primary" id="start-button" type="button">Avvia conversazione <span>↗</span></button>
         <button class="ghost danger" id="stop-button" type="button" hidden>Termina conversazione</button>
         <p class="fineprint">Carica solo foto e campioni vocali che puoi usare legittimamente. L’avatar è generato dall’AI e non rappresenta dichiarazioni autentiche della persona ritratta.</p>
