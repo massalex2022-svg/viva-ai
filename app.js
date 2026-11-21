@@ -177,7 +177,7 @@ async function api(path, payload, file=false) {
 }
 function isTemporaryGeminiError(error) {
   const message=String(error?.message||error||'');
-  return /high demand|server.*overload|temporar(?:ily|y) overloaded|service unavailable|\\b503\\b|UNAVAILABLE/i.test(message);
+  return /high demand|server.*overload|temporar(?:ily|y) overloaded|service unavailable|503|UNAVAILABLE/i.test(message);
 }
 async function chatWithRetry(payload) {
   // Solo per /api/chat: piccoli retry con attesa progressiva sugli errori temporanei.
