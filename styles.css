@@ -71,3 +71,14 @@
   0%,100%{top:42%;transform:scaleY(.1);opacity:.25}
   35%,55%{top:52%;transform:scaleY(2);opacity:1}
 }
+
+/* VIVA AI 1.4.5 — stato diagnostico evidente sopra il ritratto */
+.photo-frame .eye-diagnostic-overlay{z-index:30;background:linear-gradient(180deg,rgba(4,30,24,.25),transparent 40%)}
+.eye-diagnostic-heading{
+ position:absolute;top:10px;left:50%;transform:translateX(-50%);
+ z-index:4;max-width:95%;width:max-content;border:2px solid #68ffa4;
+ border-radius:12px;padding:10px 14px;background:#05271ff5;
+ color:#f2fff8;font-size:12px;line-height:1.3;font-weight:850;text-align:center;
+ box-shadow:0 5px 25px #000a;letter-spacing:.35px;
+}
+.eye-diagnostic-marker{z-index:3;border-width:4px;border-color:#49ff88;background:#12452a60;box-shadow:0 0 0 3px #062d24,0 0 24px #5cff98a8}
