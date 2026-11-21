@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 1.4.3 · Il tuo avatar intelligente</title>
+  <title>VIVA AI 1.4.4 · Il tuo avatar intelligente</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.4.3</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.4.4</small></div></div>
       <div class="top-right"><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -22,6 +22,7 @@
           <img id="avatar-photo" alt="Fotografia dell'avatar selezionato" hidden>
           <canvas id="avatar-canvas" aria-label="Animazione 2D delle labbra dell’avatar" hidden></canvas>
           <video id="agent-video" autoplay playsinline hidden></video>
+          <div id="eye-diagnostic-overlay" class="eye-diagnostic-overlay" hidden aria-hidden="true"></div>
           <div id="face-select-layer" class="face-select-layer" hidden aria-label="Seleziona punti del volto sulla foto">
             <span id="face-select-prompt" class="face-select-prompt">Clicca sul volto</span>
             <span id="face-select-markers" class="face-select-markers" aria-hidden="true"></span>
@@ -88,7 +89,7 @@
           </label>
           <div class="motion-buttons">
             <button class="ghost" type="button" id="motion-test">▶ Prova le labbra</button>
-            <button class="ghost" type="button" id="blink-test">◉ Prova lenta delle palpebre</button>
+            <button class="ghost" type="button" id="blink-test">◉ Verifica gli occhi (test visivo)</button>
             <button class="ghost" type="button" id="eyes-pick">◎ Indica gli occhi sulla foto</button>
             <button class="ghost" type="button" id="motion-pick">◎ Indica la bocca sulla foto</button>
           </div>
