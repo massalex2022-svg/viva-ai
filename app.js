@@ -273,6 +273,7 @@ async function start() {
   if (state.voiceSource==='custom' && !$('voice-consent').checked) return status('Per utilizzare la voce personalizzata, conferma l’autorizzazione esplicita.',true);
   if (!state.worker || !state.token) { openSettings(); return settingsStatus('Configura prima il Worker e il suo codice di accesso.',true); }
   updateName(); setBusy(true);
+  if (state.mode==='basic') motion.armAudio(); // Chiamata diretta dal clic: autorizza Web Audio prima della risposta Gemini.
   try {
     if (state.mode==='basic') {
       const data=await api('/api/status',{});
