@@ -438,6 +438,11 @@ $('voice-engine').addEventListener('change',(e)=>voiceEngineChange(e.target.valu
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('motion-pick').addEventListener('click',()=>motion.pickMouth());
+$('motion-intensity').addEventListener('input',e=>{
+  const value=Number(e.target.value);
+  motion.setIntensity(value);
+  $('motion-intensity-label').textContent=value<=.7?'Delicata':value<=.9?'Naturale':'Marcata';
+});
 $('avatar-name').addEventListener('input',updateName);
 $('mode-basic').addEventListener('click',()=>modeChange('basic'));
 $('mode-live').addEventListener('click',()=>modeChange('live'));
