@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 1.4.1 · Il tuo avatar intelligente</title>
+  <title>VIVA AI 1.4.2 · Il tuo avatar intelligente</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.4.1</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.4.2</small></div></div>
       <div class="top-right"><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -22,6 +22,10 @@
           <img id="avatar-photo" alt="Fotografia dell'avatar selezionato" hidden>
           <canvas id="avatar-canvas" aria-label="Animazione 2D delle labbra dell’avatar" hidden></canvas>
           <video id="agent-video" autoplay playsinline hidden></video>
+          <div id="face-select-layer" class="face-select-layer" hidden aria-label="Seleziona punti del volto sulla foto">
+            <span id="face-select-prompt" class="face-select-prompt">Clicca sul volto</span>
+            <span id="face-select-markers" class="face-select-markers" aria-hidden="true"></span>
+          </div>
           <div class="live-tag" id="live-tag" hidden>● VIDEO LIVE</div>
           <div class="frame-bottom"><span id="avatar-state">Nessuna fotografia</span><span id="audio-state" aria-live="polite">● In attesa</span></div>
         </div>
