@@ -436,6 +436,8 @@ $('voice-custom').addEventListener('click',()=>voiceSourceChange('custom'));
 $('voice-file').addEventListener('change',uploadVoice);
 $('voice-engine').addEventListener('change',(e)=>voiceEngineChange(e.target.value));
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
+$('motion-test').addEventListener('click',()=>motion.testMotion());
+$('motion-pick').addEventListener('click',()=>motion.pickMouth());
 $('avatar-name').addEventListener('input',updateName);
 $('mode-basic').addEventListener('click',()=>modeChange('basic'));
 $('mode-live').addEventListener('click',()=>modeChange('live'));
