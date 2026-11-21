@@ -30,3 +30,9 @@
 .motion-buttons{display:flex;flex-wrap:wrap;gap:9px;margin-top:11px}
 .motion-buttons button{flex:1;min-width:145px;font-size:12px;padding:10px}
 .photo-frame img.select-mouth{cursor:crosshair;outline:2px dashed #8beee3;outline-offset:-3px}
+
+/* VIVA AI 1.3.2 — controllo movimenti labbra */
+.motion-sensitivity{display:grid;grid-template-columns:1fr minmax(100px,1.2fr) auto;align-items:center;gap:11px;margin:12px 0 3px;color:#bfcce0;font-size:11px;font-weight:650}
+.motion-sensitivity input{width:100%;accent-color:#8ce9df;cursor:pointer}
+.motion-sensitivity output{font-size:11px;min-width:58px;color:#98f1df;text-align:right}
+@media(max-width:500px){.motion-sensitivity{grid-template-columns:1fr auto}.motion-sensitivity input{grid-column:1/-1;grid-row:2}}
