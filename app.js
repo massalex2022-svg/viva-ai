@@ -134,7 +134,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'Anteprima gratuita: la foto anima le labbra in 2D seguendo il volume della voce AI. Non è ancora una videochiamata fotorealistica.'
+    ? 'Anteprima gratuita: labbra sincronizzate alla voce e battiti delle palpebre opzionali. Movimento 2D, non un video fotorealistico.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -437,6 +437,9 @@ $('voice-file').addEventListener('change',uploadVoice);
 $('voice-engine').addEventListener('change',(e)=>voiceEngineChange(e.target.value));
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
+$('blink-test').addEventListener('click',()=>motion.testBlink());
+$('blink-enabled').addEventListener('change',e=>motion.setBlinkEnabled(e.target.checked));
+$('head-enabled').addEventListener('change',e=>motion.setHeadEnabled(e.target.checked));
 $('motion-pick').addEventListener('click',()=>motion.pickMouth());
 $('motion-intensity').addEventListener('input',e=>{
   const value=Number(e.target.value);
