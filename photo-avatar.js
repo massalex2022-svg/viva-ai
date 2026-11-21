@@ -1,4 +1,4 @@
-/* VIVA AI 1.4.4 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 1.4.5 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -267,50 +267,67 @@ export class PhotoAvatarMotion {
     if(this.diagOverlay){this.diagOverlay.hidden=true;this.diagOverlay.replaceChildren();}
   }
   showEyeDiagnosis() {
-    if(!this.diagOverlay||this.eyes.length!==2||!this.photo.naturalWidth||!this.source)return false;
+    if(!this.diagOverlay)return 'unavailable';
     this.clearEyeDiagnosis();
-    // Stesse dimensioni del ritaglio object-fit:cover, object-position:center 30%.
-    // L'overlay è inizialmente nascosto: misuriamo la cornice, sempre visibile.
-    const rect=this.diagOverlay.parentElement.getBoundingClientRect();
+    const frame=this.diagOverlay.parentElement;
+    const rect=frame?.getBoundingClientRect();
+    if(!rect?.width||!rect?.height)return 'unavailable';
+    const configured=Boolean(this.eyes.length===2 && this.source && this.canvas.width && this.canvas.height);
+    const heading=document.createElement('div');
+    heading.className='eye-diagnostic-heading';
+    heading.textContent=configured
+      ?'TEST VISIVO ATTIVO · CERCHI SUGLI OCCHI'
+      :'TEST VISIVO ATTIVO · OCCHI NON CONFIGURATI';
+    this.diagOverlay.appendChild(heading);
     const w=this.canvas.width,h=this.canvas.height;
-    if(!rect.width||!rect.height||!w||!h)return false;
-    const scale=Math.max(rect.width/w,rect.height/h);
-    const offsetX=(rect.width-w*scale)*.5;
-    const offsetY=(rect.height-h*scale)*.3;
-    this.eyes.forEach((eye,i)=>{
+    const scale=configured?Math.max(rect.width/w,rect.height/h):1;
+    const offsetX=configured?(rect.width-w*scale)*.5:0;
+    const offsetY=configured?(rect.height-h*scale)*.3:0;
+    const positions=configured?this.eyes:[
+      {cx:rect.width*.36,cy:rect.height*.39,width:38,height:14},
+      {cx:rect.width*.64,cy:rect.height*.39,width:38,height:14}
+    ];
+    positions.forEach((eye,i)=>{
       const marker=document.createElement('div');
       marker.className='eye-diagnostic-marker';
       marker.textContent=String(i+1);
-      const x=offsetX+eye.cx*scale;
-      const y=offsetY+eye.cy*scale;
+      const x=configured?offsetX+eye.cx*scale:eye.cx;
+      const y=configured?offsetY+eye.cy*scale:eye.cy;
       marker.style.left=x+'px';
       marker.style.top=y+'px';
-      marker.style.width=Math.max(34,eye.width*scale*1.2)+'px';
-      marker.style.height=Math.max(24,eye.height*scale*3.2)+'px';
+      marker.style.width=Math.max(42,eye.width*scale*1.5)+'px';
+      marker.style.height=Math.max(32,eye.height*scale*4)+'px';
       this.diagOverlay.appendChild(marker);
     });
     this.diagOverlay.hidden=false;
-    this.diagTimer=setTimeout(()=>this.clearEyeDiagnosis(),4400);
-    return true;
+    // Mantieni i riferimenti visivi abbastanza a lungo da poterli osservare.
+    this.diagTimer=setTimeout(()=>this.clearEyeDiagnosis(),7500);
+    return configured?'eyes':'preview';
   }
   testBlink() {
-    if(!this.blinkEnabled){this.status('Attiva prima «Battito palpebre».');return;}
-    if(!this.isVisible()||this.eyes.length!==2){
-      this.status('Per il test seleziona entrambi gli occhi sulla foto con «Indica gli occhi», poi riprova.');
-      return;
+    if(!this.photo.src||!this.photo.naturalWidth){
+      this.status('TEST NON AVVIATO: carica prima la fotografia e attendi che compaia.');return;
     }
-    // Due chiusure volutamente lente, per diagnosticarle prima di tornare al ritmo naturale.
-    const markers=this.showEyeDiagnosis();
-    this.status(markers
-      ?'TEST AVVIATO: due cerchi verdi devono comparire esattamente sugli occhi e muoversi. Se li vedi ma le palpebre restano ferme, il problema è nel disegno 2D.'
-      :'Test non visibile: la fotografia o le coordinate degli occhi non sono ancora pronte.');
+    const diagnostic=this.showEyeDiagnosis();
+    if(diagnostic==='unavailable'){
+      this.status('TEST NON DISPONIBILE: non riesco a visualizzare il riquadro diagnostico. Inviami uno screenshot della pagina.');return;
+    }
+    if(diagnostic==='preview'){
+      this.status('TEST GRAFICO ATTIVO: dovresti vedere due cerchi verdi e la scritta OCCHI NON CONFIGURATI. Poi premi «Indica gli occhi» e segnali entrambi.');return;
+    }
+    if(!this.blinkEnabled){
+      this.status('I cerchi indicano gli occhi, ma il battito è disattivato: seleziona «Battito delle palpebre».');return;
+    }
+    if(!this.isVisible()){
+      this.status('I cerchi indicano gli occhi, ma il disegno non è pronto: carica di nuovo la foto.');return;
+    }
+    this.status('TEST AVVIATO: due cerchi verdi mostrano dove l’app rileva gli occhi. Dovresti vedere due chiusure lente.');
     if(this.blinkTestTimer!==null)clearTimeout(this.blinkTestTimer);
     if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
     this.blinkTestTimer=null;this.blinkTimer=null;
     this.startBlink(1050);
     this.blinkTestTimer=setTimeout(()=>{
-      this.blinkTestTimer=null;
-      this.startBlink(1050);
+      this.blinkTestTimer=null;this.startBlink(1050);
     },1480);
   }
   setBlinkEnabled(value) {
