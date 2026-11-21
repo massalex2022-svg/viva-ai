@@ -438,6 +438,7 @@ $('voice-engine').addEventListener('change',(e)=>voiceEngineChange(e.target.valu
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('blink-test').addEventListener('click',()=>motion.testBlink());
+$('eyes-pick').addEventListener('click',()=>motion.pickEyes());
 $('blink-enabled').addEventListener('change',e=>motion.setBlinkEnabled(e.target.checked));
 $('head-enabled').addEventListener('change',e=>motion.setHeadEnabled(e.target.checked));
 $('motion-pick').addEventListener('click',()=>motion.pickMouth());
