@@ -27,6 +27,7 @@ export class PhotoAvatarMotion {
     this.ctx=canvas.getContext('2d', {alpha:false});
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
+    this.shape=.48; this.intensity=.75; this.freq=null;
     this.browserSpeaking=false; this.browserStart=0;
     this.demoUntil=0;this.demoStart=0;this.manualPending=false;
     this.analyser=null; this.audioContext=null; this.samples=null;
@@ -123,8 +124,12 @@ export class PhotoAvatarMotion {
     if(!this.ready){this.status('Il volto non è pronto: premi «Indica la bocca sulla foto», clicca sulla bocca e riprova.');return;}
     this.demoStart=performance.now();
     this.demoUntil=this.demoStart+3200;
-    this.status('TEST: osserva le labbra per alcuni secondi. Se si muovono, prova una risposta Gemini.');
+    this.status('TEST: movimento più morbido, con aperture diverse e pause. Osserva soprattutto la naturalezza delle labbra.');
     this.run();
+  }
+  setIntensity(value) {
+    this.intensity=clamp(Number(value)||.75,.35,1.25);
+    if(this.ready&&!this.frame)this.draw(this.level,this.shape);
   }
   setMode(mode) {
     this.mode=mode;
@@ -150,11 +155,12 @@ export class PhotoAvatarMotion {
         this.audioContext=new AudioCtor();
         const source=this.audioContext.createMediaElementSource(this.audio);
         this.analyser=this.audioContext.createAnalyser();
-        this.analyser.fftSize=1024;
-        this.analyser.smoothingTimeConstant=.72;
+        this.analyser.fftSize=2048;
+        this.analyser.smoothingTimeConstant=.52;
         source.connect(this.analyser);
         this.analyser.connect(this.audioContext.destination);
         this.samples=new Uint8Array(this.analyser.fftSize);
+        this.freq=new Uint8Array(this.analyser.frequencyBinCount);
       }
       if(this.audioContext.state==='suspended')void this.audioContext.resume().catch(e=>console.warn(e));
     } catch(e) {
@@ -175,8 +181,8 @@ export class PhotoAvatarMotion {
   }
   reset(){
     if(this.frame)cancelAnimationFrame(this.frame);
-    this.frame=0;this.level=0;
-    if(this.ready)this.draw(0);
+    this.frame=0;this.level=0;this.shape=.48;
+    if(this.ready)this.draw(0,this.shape);
   }
   paint(time){
     this.frame=0;
@@ -185,61 +191,99 @@ export class PhotoAvatarMotion {
     const demo=this.demoUntil>time;
     if(!playing && !this.browserSpeaking && !demo){this.reset();return;}
     let target=0;
-    if(demo){
+    let shapeTarget=.48;
+    if(demo) {
       const t=(time-this.demoStart)/1000;
-      target=clamp(.6+.38*Math.sin(t*13),.16,1);
+      const syllables=Math.pow(Math.max(0,Math.sin(t*10.8)),.8);
+      target=clamp(.12+.8*syllables,0,1);
+      shapeTarget=clamp(.5+.28*Math.sin(t*3.5),.14,.86);
     } else if(playing && this.analyser && this.audioContext?.state==='running'){
       this.analyser.getByteTimeDomainData(this.samples);
       let sum=0;
       for(const x of this.samples){const d=(x-128)/128;sum+=d*d;}
-      target=clamp(Math.sqrt(sum/this.samples.length)*10,.0,1);
+      const rms=Math.sqrt(sum/this.samples.length);
+      // Noise gate e attacco/rilascio: la bocca si chiude nelle pause.
+      target=clamp((rms-.015)*12,0,1);
+      if(target<.07)target=0;
+      if(this.freq){
+        this.analyser.getByteFrequencyData(this.freq);
+        const bins=this.freq.length;
+        const hz=this.audioContext.sampleRate/this.analyser.fftSize;
+        let low=0,high=0,nLow=0,nHigh=0;
+        for(let i=Math.max(1,Math.floor(220/hz));i<Math.min(bins,Math.ceil(850/hz));i++){low+=this.freq[i];nLow++;}
+        for(let i=Math.max(1,Math.floor(1000/hz));i<Math.min(bins,Math.ceil(2800/hz));i++){high+=this.freq[i];nHigh++;}
+        const diff=(nHigh?high/nHigh:0)-(nLow?low/nLow:0);
+        // Forma indicativa da timbro/energia: non è riconoscimento dei fonemi.
+        shapeTarget=clamp(.53+diff/210,.22,.79);
+      }
     } else if(this.browserSpeaking) {
-      // Il browser non espone la forma d'onda della sintesi Chrome: movimento solo indicativo.
+      // La voce Chrome non fornisce l'onda audio; animazione indicativa.
       const t=(time-this.browserStart)/1000;
-      target=clamp(.45+.25*Math.sin(t*15)+.15*Math.sin(t*8.5),0,1);
+      target=clamp(.32+.3*Math.sin(t*12)+.15*Math.sin(t*5.7),0,1);
+      shapeTarget=clamp(.5+.2*Math.sin(t*3.6),.22,.78);
     }
-    this.level+=(target-this.level)*.36;
-    this.draw(this.level);
+    const smoothing=target>this.level?.31:.19;
+    this.level+=(target-this.level)*smoothing;
+    this.shape+=(shapeTarget-this.shape)*.17;
+    if(this.level<.035)this.level=0;
+    this.draw(this.level,this.shape);
     this.frame=requestAnimationFrame(this.paint);
   }
-  draw(openness) {
+  draw(openness,shape=.48) {
     if(!this.source||!this.mouth)return;
     const ctx=this.ctx, m=this.mouth, w=this.canvas.width, h=this.canvas.height;
     ctx.clearRect(0,0,w,h);
     ctx.drawImage(this.source,0,0);
-    if(openness<.045)return;
-    // La geometria è intenzionalmente leggera: apre lo spazio tra le labbra
-    // e sposta una piccola porzione del labbro inferiore senza deformare tutto il ritratto.
+    const amount=clamp(openness*this.intensity,0,1);
+    if(amount<.07)return;
+
     const width=m.width;
-    const gap=Math.max(0,(width*.155)*openness);
-    const innerTop=m.top;
-    const lipBottom=m.bottom;
-    const cx=m.cx;
-    const rx=width*.40;
-    const centerY=(innerTop+lipBottom+gap)*.5;
-    const radiusY=Math.max(1.5,((lipBottom-innerTop)+gap)*.5);
+    const x=m.cx;
+    const middle=(m.top+m.bottom)*.5;
+    const span=width*clamp(.75+(shape-.5)*.32,.66,.84);
+    const radiusX=span*.5;
+    const opening=width*(.015+.105*amount)*amount;
+    const halfHeight=Math.max(.7,Math.min(width*.115,Math.max((m.bottom-m.top)*.5,0)+opening*.65));
+    const cxLeft=x-radiusX,cxRight=x+radiusX;
+    const lowerShift=clamp(opening*.46,0,width*.053);
+
+    // Muovi lievemente il labbro inferiore usando texture dalla stessa fotografia.
+    // La maschera arrotondata evita una cucitura rettangolare visibile.
+    if(lowerShift>.6){
+      const lipHeight=Math.max(width*.10,m.outer-m.bottom+width*.10);
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(x,m.bottom+lipHeight*.3,width*.48,lipHeight*.8+lowerShift*.6,0,0,Math.PI*2);
+      ctx.clip();
+      ctx.globalAlpha=clamp(amount*.68,0,.68);
+      ctx.drawImage(this.source,0,lowerShift);
+      ctx.restore();
+    }
+
+    // Fessura interna: curve di Bézier con angoli sottili, anziché un'ellisse nera.
     ctx.save();
-    const grad=ctx.createLinearGradient(cx,innerTop,cx,lipBottom+gap);
-    grad.addColorStop(0,'#261319');
-    grad.addColorStop(.65,'#4c222c');
-    grad.addColorStop(1,'#35171f');
     ctx.beginPath();
-    ctx.ellipse(cx,centerY,rx,radiusY,0,0,Math.PI*2);
-    ctx.fillStyle=grad;
-    ctx.globalAlpha=clamp(openness*1.25,0,1);
+    ctx.moveTo(cxLeft,middle);
+    ctx.bezierCurveTo(x-radiusX*.61,middle-halfHeight*.87,x-radiusX*.25,middle-halfHeight,x,middle-halfHeight);
+    ctx.bezierCurveTo(x+radiusX*.25,middle-halfHeight,x+radiusX*.61,middle-halfHeight*.87,cxRight,middle);
+    ctx.bezierCurveTo(x+radiusX*.64,middle+halfHeight*.66,x+radiusX*.23,middle+halfHeight,x,middle+halfHeight);
+    ctx.bezierCurveTo(x-radiusX*.23,middle+halfHeight,x-radiusX*.64,middle+halfHeight*.66,cxLeft,middle);
+    ctx.closePath();
+    const cavity=ctx.createLinearGradient(x,middle-halfHeight,x,middle+halfHeight);
+    cavity.addColorStop(0,'#40252b');
+    cavity.addColorStop(.43,'#25151a');
+    cavity.addColorStop(1,'#5a333b');
+    ctx.fillStyle=cavity;
+    ctx.globalAlpha=clamp(amount*.91,0,.91);
     ctx.fill();
-    ctx.restore();
-    // Tratto inferiore delle labbra: ridisegnato qualche pixel più in basso.
-    const fromY=clamp(Math.floor(lipBottom),0,h-2);
-    const bandH=Math.min(h-fromY,Math.max(3,Math.round(m.outer-lipBottom+width*.11)));
-    const fromX=clamp(Math.floor(cx-width*.52),0,w-2);
-    const bandW=Math.min(w-fromX,Math.max(3,Math.round(width*1.04)));
-    ctx.save();
+
+    // Leggera luce sul labbro inferiore, attenuata per evitare contorni caricaturali.
     ctx.beginPath();
-    ctx.ellipse(cx,lipBottom+bandH*.35+gap*.35,width*.52,bandH*.78+gap*.5,0,0,Math.PI*2);
-    ctx.clip();
-    ctx.globalAlpha=clamp(openness*.94,0,1);
-    ctx.drawImage(this.source,fromX,fromY,bandW,bandH,fromX,fromY+gap,bandW,bandH);
+    ctx.moveTo(x-radiusX*.78,middle+halfHeight*.39);
+    ctx.quadraticCurveTo(x,middle+halfHeight*1.3,x+radiusX*.78,middle+halfHeight*.39);
+    ctx.strokeStyle='rgba(199,135,137,.28)';
+    ctx.lineWidth=Math.max(.5,width*.010)*clamp(amount,.1,1);
+    ctx.stroke();
     ctx.restore();
   }
   dispose(){
