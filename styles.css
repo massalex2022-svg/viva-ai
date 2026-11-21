@@ -25,3 +25,8 @@
 .motion-checkbox b{display:block;color:#e7f3ff;font-size:12px}
 .motion-checkbox small{display:block;margin-top:5px;color:#a1aec4;line-height:1.5}
 #photo-motion-status{margin-top:6px}
+
+/* VIVA AI 1.3.1 · Test e posizionamento manuale della bocca */
+.motion-buttons{display:flex;flex-wrap:wrap;gap:9px;margin-top:11px}
+.motion-buttons button{flex:1;min-width:145px;font-size:12px;padding:10px}
+.photo-frame img.select-mouth{cursor:crosshair;outline:2px dashed #8beee3;outline-offset:-3px}
