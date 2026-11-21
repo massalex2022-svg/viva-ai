@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 1.2 · Il tuo avatar intelligente</title>
+  <title>VIVA AI 1.3 · Il tuo avatar intelligente</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.2</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.3</small></div></div>
       <div class="top-right"><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -20,6 +20,7 @@
         <div class="photo-frame" id="photo-frame">
           <div id="avatar-placeholder" class="avatar-placeholder"><div class="placeholder-glow"></div><div class="avatar-symbol">◉</div><p>La tua fotografia comparirà qui</p><span>JPG o PNG · un volto ben visibile</span></div>
           <img id="avatar-photo" alt="Fotografia dell'avatar selezionato" hidden>
+          <canvas id="avatar-canvas" aria-label="Animazione 2D delle labbra dell’avatar" hidden></canvas>
           <video id="agent-video" autoplay playsinline hidden></video>
           <div class="live-tag" id="live-tag" hidden>● VIDEO LIVE</div>
           <div class="frame-bottom"><span id="avatar-state">Nessuna fotografia</span><span id="audio-state" aria-live="polite">● In attesa</span></div>
@@ -63,8 +64,12 @@
           </div>
         </section>
         <label class="field personality-field">Come deve comportarsi?<textarea id="personality" rows="3" maxlength="900" placeholder="Es. cordiale, curioso, brillante e spiritoso">Sei un assistente amichevole, competente e naturale. Rispondi in italiano, in maniera chiara e non ripetitiva. Ricorda ciò che è stato appena detto nella conversazione.</textarea></label>
-        <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Voce AI</b><small>Foto fissa · Gemini</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
-        <div class="mode-info" id="mode-info">La foto rimane fissa. Gemini risponde e genera una voce più naturale, oppure puoi usare la voce di Chrome.</div>
+        <div class="photo-motion-settings">
+          <label class="consent-line motion-checkbox"><input type="checkbox" id="photo-motion-enabled" checked><span><b>Anima le labbra · prova gratuita</b><small>Movimento 2D dalla foto, sincronizzato al volume della voce Gemini. Non è ancora un video fotorealistico.</small></span></label>
+          <div class="voice-help" id="photo-motion-status" role="status">Carica un ritratto frontale per preparare l'animazione.</div>
+        </div>
+        <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Voce AI + labbra 2D</b><small>Foto animata · Gemini</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
+        <div class="mode-info" id="mode-info">La foto può animare la bocca in 2D mentre Gemini parla. Non è ancora video AI fotorealistico.</div>
         <button class="primary" id="start-button" type="button">Avvia conversazione <span>↗</span></button>
         <button class="ghost danger" id="stop-button" type="button" hidden>Termina conversazione</button>
         <p class="fineprint">Carica solo foto e campioni vocali che puoi usare legittimamente. L’avatar è generato dall’AI e non rappresenta dichiarazioni autentiche della persona ritratta.</p>
