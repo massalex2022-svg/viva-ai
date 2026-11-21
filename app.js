@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=145';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
 const state = {
