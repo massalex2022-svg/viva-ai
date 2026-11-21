@@ -43,6 +43,7 @@ function addMessage(role, content) {
   node.append(document.createTextNode(content));
   $('chat-scroll').append(node);
   $('chat-scroll').scrollTop = $('chat-scroll').scrollHeight;
+  return node;
 }
 function voiceSourceChange(next) {
   if (state.active || state.busy) return status('Termina la conversazione prima di cambiare la voce.',true);
@@ -174,6 +175,28 @@ async function api(path, payload, file=false) {
   if (!response.ok || !data.ok) throw Error(data.error || `Errore HTTP ${response.status}`);
   return data;
 }
+function isTemporaryGeminiError(error) {
+  const message=String(error?.message||error||'');
+  return /high demand|server.*overload|temporar(?:ily|y) overloaded|service unavailable|\\b503\\b|UNAVAILABLE/i.test(message);
+}
+async function chatWithRetry(payload) {
+  // Solo per /api/chat: piccoli retry con attesa progressiva sugli errori temporanei.
+  // In caso di chiave errata, modello non disponibile (404) o quota esaurita (429),
+  // restituisce subito il messaggio originale senza fare nuove richieste.
+  for(let attempt=0;attempt<3;attempt++) {
+    try {
+      return await api('/api/chat',payload);
+    } catch(err) {
+      if (!isTemporaryGeminiError(err) || attempt===2) {
+        if(isTemporaryGeminiError(err)) throw Error('Gemini è temporaneamente sovraccarico (503). Riprova più tardi: la domanda è rimasta nel campo di scrittura.');
+        throw err;
+      }
+      status('Gemini è molto richiesto. Riprovo automaticamente ('+(attempt+1)+'/2)...');
+      await new Promise(resolve=>setTimeout(resolve,attempt===0?1200:2800));
+    }
+  }
+}
+
 async function checkWorker() {
   settingValues();
   settingsStatus('Verifica in corso...');
@@ -338,7 +361,7 @@ async function send(text) {
   if (!message || state.busy) return;
   if (!state.active) return status('Premi prima “Avvia conversazione”.',true);
   $('message-input').value='';
-  addMessage('user',message);
+  const userBubble=addMessage('user',message);
   setBusy(true);
   try {
     if (state.mode==='live') {
@@ -347,7 +370,7 @@ async function send(text) {
     } else {
       state.messages.push({role:'user',text:message});
       status('L’avatar sta pensando...');
-      const data=await api('/api/chat',{
+      const data=await chatWithRetry({
         name:nameValue(),personality:$('personality').value,
         messages:state.messages.slice(-20),
       });
@@ -364,7 +387,9 @@ async function send(text) {
   } catch(error) {
     // Non registrare domande fallite nella cronologia, per permettere il retry.
     if (state.mode==='basic') state.messages.pop();
-    status(error.message || 'Errore durante la risposta.',true);
+    userBubble?.remove();
+    if (!$('message-input').value.trim()) $('message-input').value=message;
+    status(error.message || 'Errore durante la risposta. La domanda è rimasta nel campo di scrittura.',true);
   } finally { setBusy(false); }
 }
 function microphone() {
