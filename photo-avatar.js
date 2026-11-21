@@ -1,4 +1,4 @@
-/* VIVA AI 1.3 — anteprima labbra su fotografia, elaborazione nel browser.
+/* VIVA AI 1.4 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -28,6 +28,8 @@ export class PhotoAvatarMotion {
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=.75; this.freq=null;
+    this.eyes=[];this.blinkEnabled=true;this.headEnabled=false;
+    this.blinkStart=-1;this.blinkTimer=null;this.blinkAmount=0;
     this.browserSpeaking=false; this.browserStart=0;
     this.demoUntil=0;this.demoStart=0;this.manualPending=false;
     this.analyser=null; this.audioContext=null; this.samples=null;
@@ -45,7 +47,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null; this.manualPending=false; this.photo.classList.remove('select-mouth'); this.onAudioStop();
+    this.ready=false; this.mouth=null;this.eyes=[];this.clearBlink(); this.manualPending=false; this.photo.classList.remove('select-mouth'); this.onAudioStop();
     this.updateDisplay();
     if (!this.enabled) { this.status('Animazione disattivata: attivala per rilevare il volto.'); return; }
     try {
@@ -75,9 +77,13 @@ export class PhotoAvatarMotion {
         outer:Math.max(lip.y,lower.y+width*.07),
         width
       };
+      this.eyes=this.prepareEyes(points,w,h);
       this.ready=true;
       this.level=0; this.draw(0); this.updateDisplay();
-      this.status('Volto riconosciuto. Durante la voce Gemini la bocca seguirà il volume dell’audio.');
+      this.scheduleBlink();
+      this.status(this.eyes.length===2
+        ? 'Bocca e occhi riconosciuti. Prova «Battito di palpebre» o avvia Gemini.'
+        : 'Bocca riconosciuta; occhi non rilevati con sufficiente precisione. Usa una fotografia frontale per i battiti.');
     } catch (e) {
       if(seq!==this.seq)return;
       this.ready=false;this.updateDisplay();
@@ -89,7 +95,7 @@ export class PhotoAvatarMotion {
       this.status('Prima carica una foto con il volto ben visibile.');return;
     }
     ++this.seq; // Ignora eventuale riconoscimento automatico ancora in corso.
-    this.reset();
+    this.reset();this.clearBlink();this.eyes=[];
     this.ready=false;
     this.manualPending=true;
     this.updateDisplay();
@@ -116,8 +122,9 @@ export class PhotoAvatarMotion {
     const width=clamp(w*.13,22,Math.max(23,w*.2));
     this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
     this.ready=true;this.manualPending=false;this.photo.classList.remove('select-mouth');
+    this.status('Bocca impostata a mano. Il battito degli occhi richiede il rilevamento automatico del volto.');
     this.draw(0);this.updateDisplay();
-    this.status('Bocca posizionata manualmente. Premi «Prova il movimento»; poi ascolta una risposta Gemini.');
+    this.status('Bocca impostata manualmente. Ora prova il movimento; per i battiti degli occhi serve una foto riconosciuta automaticamente.');
   }
   testMotion() {
     if(!this.enabled){this.status('Attiva prima «Anima le labbra».');return;}
@@ -127,20 +134,113 @@ export class PhotoAvatarMotion {
     this.status('TEST: movimento più morbido, con aperture diverse e pause. Osserva soprattutto la naturalezza delle labbra.');
     this.run();
   }
+  prepareEyes(points,w,h) {
+    // Facemesh: 33/133 e 362/263 sono gli angoli; 159/145 e 386/374 le palpebre.
+    const groups=[[33,133,159,145],[362,263,386,374]];
+    const eyeList=[];
+    for(const [a,b,up,down] of groups){
+      const p=i=>({x:points[i].x*w,y:points[i].y*h});
+      const left=p(a),right=p(b),upper=p(up),lower=p(down);
+      const span=Math.hypot(right.x-left.x,right.y-left.y);
+      const opening=Math.hypot(lower.x-upper.x,lower.y-upper.y);
+      if(!Number.isFinite(span)||span<16||opening<2.4||opening>span*.48)continue;
+      const cx=(left.x+right.x)*.5,cy=(upper.y+lower.y)*.5;
+      const angle=Math.atan2(right.y-left.y,right.x-left.x);
+      // Evita che la toppa oltrepassi i confini della fotografia.
+      if(cx-span*.64<0||cx+span*.64>w||cy-opening*2<0||cy+opening*2>h)continue;
+      eyeList.push({cx,cy,width:span,height:opening,angle});
+    }
+    return eyeList;
+  }
+  clearBlink() {
+    if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
+    this.blinkTimer=null;this.blinkStart=-1;this.blinkAmount=0;
+  }
+  scheduleBlink() {
+    if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
+    this.blinkTimer=null;
+    if(!this.blinkEnabled||!this.enabled||!this.ready||!this.eyes.length||this.mode!=='basic')return;
+    this.blinkTimer=setTimeout(()=>{
+      this.blinkTimer=null;
+      if(document.hidden){this.scheduleBlink();return;}
+      this.startBlink();
+    },2600+Math.random()*3700);
+  }
+  startBlink() {
+    if(!this.isVisible()||!this.blinkEnabled||!this.eyes.length)return false;
+    this.blinkStart=performance.now();
+    this.run();
+    return true;
+  }
+  testBlink() {
+    if(!this.blinkEnabled){this.status('Attiva prima «Battito palpebre».');return;}
+    if(!this.ready || !this.eyes.length){
+      this.status('Non posso muovere le palpebre: serve una foto frontale con occhi riconosciuti automaticamente.');
+      return;
+    }
+    this.status('TEST PALPEBRE: osserva gli occhi. Il battito dura circa un quarto di secondo.');
+    this.startBlink();
+  }
+  setBlinkEnabled(value) {
+    this.blinkEnabled=Boolean(value);
+    this.clearBlink();
+    if(this.blinkEnabled)this.scheduleBlink();
+    if(this.ready)this.draw(this.level,this.shape);
+  }
+  setHeadEnabled(value) {
+    this.headEnabled=Boolean(value);
+    if(this.ready)this.draw(this.level,this.shape);
+  }
+  paintEyes(ctx, blink) {
+    if(blink<=.01||!this.eyes.length)return;
+    for(const eye of this.eyes){
+      ctx.save();
+      ctx.translate(eye.cx,eye.cy);
+      ctx.rotate(eye.angle);
+      const rx=eye.width*.47,half=eye.height*.83;
+      // Maschera locale e texture ricavata dalla pelle sopra la palpebra.
+      // Resta una simulazione 2D, non una generazione 3D del volto.
+      ctx.beginPath();
+      ctx.ellipse(0,0,rx,half,0,0,Math.PI*2);
+      ctx.clip();
+      ctx.globalAlpha=Math.min(.96,blink*.96);
+      ctx.rotate(-eye.angle);
+      ctx.translate(-eye.cx,-eye.cy);
+      const x=Math.max(0,eye.cx-eye.width*.52);
+      const drawWidth=Math.min(this.canvas.width-x,eye.width*1.04);
+      const sampleTop=Math.max(0,eye.cy-eye.height*1.45);
+      const skinBand=Math.max(1.5,eye.height*.38);
+      const targetTop=eye.cy-eye.height*.9;
+      const targetH=eye.height*1.8;
+      ctx.drawImage(this.source,x,sampleTop,drawWidth,skinBand,x,targetTop,drawWidth,targetH);
+      ctx.restore();
+      // Linea della palpebra chiusa (molto sottile, senza oscurare l'occhio).
+      if(blink>.56){
+        ctx.save();ctx.translate(eye.cx,eye.cy);ctx.rotate(eye.angle);
+        ctx.beginPath();
+        ctx.moveTo(-rx*.9,0);
+        ctx.quadraticCurveTo(0,eye.height*.18,rx*.9,0);
+        ctx.strokeStyle='rgba(70,45,44,'+(blink*.39)+')';
+        ctx.lineWidth=Math.max(.55,eye.width*.013);
+        ctx.stroke();ctx.restore();
+      }
+    }
+  }
   setIntensity(value) {
     this.intensity=clamp(Number(value)||.75,.35,1.25);
     if(this.ready&&!this.frame)this.draw(this.level,this.shape);
   }
   setMode(mode) {
     this.mode=mode;
-    if(mode!=='basic')this.reset();
+    if(mode!=='basic'){this.reset();this.clearBlink();}
+    else this.scheduleBlink();
     this.updateDisplay();
   }
   setEnabled(value) {
     this.enabled=Boolean(value);
-    if(!this.enabled){this.reset();this.manualPending=false;this.photo.classList.remove('select-mouth');}
+    if(!this.enabled){this.reset();this.clearBlink();this.manualPending=false;this.photo.classList.remove('select-mouth');}
     if(this.enabled && !this.ready && this.photo.src) void this.loadPhoto();
-    else this.updateDisplay();
+    else {this.updateDisplay();if(this.enabled)this.scheduleBlink();}
   }
   setBrowserSpeaking(value) {
     this.browserSpeaking=Boolean(value);
@@ -189,7 +289,8 @@ export class PhotoAvatarMotion {
     if(!this.isVisible())return;
     const playing=!this.audio.paused && !this.audio.ended && !!this.audio.currentSrc;
     const demo=this.demoUntil>time;
-    if(!playing && !this.browserSpeaking && !demo){this.reset();return;}
+    const blinking=this.blinkStart>=0;
+    if(!playing && !this.browserSpeaking && !demo && !blinking){this.reset();return;}
     let target=0;
     let shapeTarget=.48;
     if(demo) {
@@ -226,6 +327,16 @@ export class PhotoAvatarMotion {
     this.level+=(target-this.level)*smoothing;
     this.shape+=(shapeTarget-this.shape)*.17;
     if(this.level<.035)this.level=0;
+    if(blinking){
+      const phase=(time-this.blinkStart)/245;
+      if(phase>=1){
+        this.blinkStart=-1;this.blinkAmount=0;this.scheduleBlink();
+      }else{
+        // Contrazione rapida e riapertura più dolce.
+        const t=clamp(phase,0,1);
+        this.blinkAmount=Math.pow(Math.sin(Math.PI*t),1.25);
+      }
+    }
     this.draw(this.level,this.shape);
     this.frame=requestAnimationFrame(this.paint);
   }
@@ -233,9 +344,19 @@ export class PhotoAvatarMotion {
     if(!this.source||!this.mouth)return;
     const ctx=this.ctx, m=this.mouth, w=this.canvas.width, h=this.canvas.height;
     ctx.clearRect(0,0,w,h);
+    ctx.save();
+    if(this.headEnabled && this.level>.08){
+      // Rotazione inferiore a 0.2 gradi, niente traslazione su/giù.
+      const angle=Math.sin(performance.now()/1700)*.0024*this.level;
+      ctx.translate(w*.5,h*.5);
+      ctx.rotate(angle);
+      ctx.scale(1.006,1.006);
+      ctx.translate(-w*.5,-h*.5);
+    }
     ctx.drawImage(this.source,0,0);
+    this.paintEyes(ctx,this.blinkAmount);
     const amount=clamp(openness*this.intensity,0,1);
-    if(amount<.07)return;
+    if(amount<.07){ctx.restore();return;}
 
     const width=m.width;
     const x=m.cx;
@@ -285,9 +406,10 @@ export class PhotoAvatarMotion {
     ctx.lineWidth=Math.max(.5,width*.010)*clamp(amount,.1,1);
     ctx.stroke();
     ctx.restore();
+    ctx.restore(); // trasformazione discreta del volto
   }
   dispose(){
-    ++this.seq; this.reset();
+    ++this.seq; this.reset();this.clearBlink();
     try{this.audioContext?.close();}catch{}
   }
 }
