@@ -44,3 +44,10 @@
 .face-option small{display:block;margin-top:3px;color:#a5b5cc;font-size:10px;line-height:1.45}
 .face-option input{flex:0 0 auto}
 @media(max-width:550px){.face-options{grid-template-columns:1fr}}
+
+/* VIVA AI 1.4.2 — mirino interattivo sopra la foto (anche con canvas sottostante) */
+.photo-frame .face-select-layer{position:absolute;inset:0;z-index:12;cursor:crosshair;touch-action:none;background:rgba(10,25,38,.10);box-shadow:inset 0 0 0 3px #86f3dfb5}
+.photo-frame .face-select-layer[hidden]{display:none!important}
+.photo-frame .face-select-prompt{position:absolute;top:12px;left:50%;transform:translateX(-50%);max-width:94%;width:max-content;padding:9px 13px;background:#092536e8;border:1px solid #91ebda;color:#e7fff9;border-radius:12px;font-size:12px;font-weight:800;text-align:center;pointer-events:none;z-index:2;box-shadow:0 4px 15px #0009;letter-spacing:.4px}
+.photo-frame .face-select-markers{position:absolute;inset:0;pointer-events:none}
+.photo-frame .face-pick-marker{position:absolute;display:grid;place-items:center;width:26px;height:26px;border:2px solid #fff;border-radius:50%;background:#1b95baae;color:#fff;transform:translate(-50%,-50%);font-size:12px;font-weight:800;box-shadow:0 0 0 3px #023d49bb}
