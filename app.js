@@ -653,6 +653,9 @@ async function playAudioBlob(blob,myJob) {
   const timeline=await analyzeSpeechWav(blob);
   if(myJob!==state.speechJob)return;
   motion.setSpeechTimeline(timeline);
+  // Anche con la timeline WAV, l'elemento audio passa attraverso Web Audio.
+  // Chrome può sospendere quel contesto dopo una sessione microfono: riattivalo.
+  try{motion.armAudio()}catch(err){console.warn('VIVA AI: ripresa audio non riuscita',err)}
   state.playingUrl=URL.createObjectURL(blob);
   const audio=$('generated-audio');
   audio.src=state.playingUrl;audio.hidden=false;
@@ -667,6 +670,7 @@ async function playAudioBlob(blob,myJob) {
   audio.onplay=()=>{
     if(myJob!==state.speechJob)return;
     clearGeminiPlaybackRecovery();
+    try{if(motion.audioContext?.state==='suspended')motion.armAudio()}catch{}
     $('audio-state').textContent='◉ Sta parlando (Gemini)';
     state.voiceCycleActive=true;
     if(state.recognition){try{state.recognition.stop()}catch{}}
@@ -1093,6 +1097,9 @@ function toggleHandsFree(){
   if(!(window.SpeechRecognition||window.webkitSpeechRecognition))return status('Questo browser non supporta il riconoscimento vocale.',true);
   if(state.busy)return status('Attendi che Gemini prepari la risposta.',true);
   state.handsFree=true;state.handsFreeIdleRestarts=0;
+  // Richiama Web Audio nel clic che abilita il microfono, senza creare
+  // una nuova sorgente: il metodo riusa il contesto già esistente.
+  try{motion.armAudio()}catch{}
   if(state.recognition){try{state.recognition.stop()}catch{}state.recognition=null;}
   stopSpokenAudio();
   state.voiceCycleActive=false;
@@ -1285,8 +1292,9 @@ $('play-gemini-audio').addEventListener('click',()=>{
   const audio=$('generated-audio');
   if(state.mode!=='basic'||!state.active||!state.playingUrl||!audio.src)
     return status('Non c’è una risposta Gemini da ascoltare.',true);
-  // La chiamata a play() deve avvenire direttamente nel clic dell'utente.
+  // Sia play() sia la riattivazione di Web Audio avvengono nel clic reale.
   try{
+    motion.armAudio();
     const playback=audio.play();
     if(playback&&typeof playback.catch==='function'){
       void playback.catch(err=>{
