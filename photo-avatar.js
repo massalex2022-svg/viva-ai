@@ -1,4 +1,4 @@
-/* VIVA AI 2.15 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
+/* VIVA AI 2.16 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -40,7 +40,7 @@ export class PhotoAvatarMotion {
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=1.20; this.browIntensity=.35; this.freq=null;
-    this.articulationEnabled=true;this.lipPalette=null;
+    this.articulationEnabled=true;this.lipPalette=null;this.lipContour=null;this.lipContourEnabled=true;
     this.lastFrameTime=0;this.speechTimeline=null;
     this.eyes=[];this.blinkEnabled=false;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
@@ -102,7 +102,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null;this.lipPalette=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;this.responseMood='neutral';if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
+    this.ready=false; this.mouth=null;this.lipPalette=null;this.lipContour=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;this.responseMood='neutral';if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
     this.manualPending=false;this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');this.onAudioStop();
     this.updateDisplay();
@@ -134,6 +134,7 @@ export class PhotoAvatarMotion {
         outer:Math.max(lip.y,lower.y+width*.07),
         width
       };
+      this.lipContour=this.buildLipContour(points,w,h,width);
       this.eyes=this.prepareEyes(points,w,h);
       // FaceMesh: i punti 105 e 334 sono sulla zona delle sopracciglia.
       // Associamo ciascun sopracciglio all'occhio più vicino nell'immagine.
@@ -191,6 +192,7 @@ export class PhotoAvatarMotion {
     this.source.getContext('2d').drawImage(this.photo,0,0,w,h);
     const width=clamp(w*.13,22,Math.max(23,w*.2));
     this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
+    this.lipContour=null; // Senza FaceMesh restano le labbra 2.15.
     this.ready=true;this.updateLipPalette();this.manualPending=false;this.photo.classList.remove('select-mouth');
     this.setupLids();this.setupBrows();
     if(this.warp)this.warp.ready=false;
@@ -613,6 +615,82 @@ export class PhotoAvatarMotion {
       }
     }
   }
+  setLipContourEnabled(value){
+    this.lipContourEnabled=Boolean(value);
+    if(this.ready&&!this.frame)this.draw(this.level,this.shape);
+  }
+  buildLipContour(points,w,h,mouthWidth){
+    // Punti interni del contorno delle labbra rilevati da MediaPipe FaceMesh.
+    // Nessun generatore esterno, nessuna foto inviata fuori dal browser.
+    const upper=[78,191,80,81,82,13,312,311,310,415,308];
+    const lower=[78,95,88,178,87,14,317,402,318,324,308];
+    if(!Array.isArray(points)||points.length<416)return null;
+    const take=indexes=>indexes.map(i=>({
+      x:points[i]?.x*w,
+      y:points[i]?.y*h
+    }));
+    const top=take(upper),bottom=take(lower);
+    if([...top,...bottom].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return null;
+    const detectedWidth=Math.hypot(top[0].x-top[10].x,top[0].y-top[10].y);
+    if(detectedWidth<mouthWidth*.45||detectedWidth>mouthWidth*1.25)return null;
+    if(top[5].y>bottom[5].y+mouthWidth*.045)return null;
+    return {top,bottom};
+  }
+  drawLandmarkMouth(ctx,amount,shape){
+    if(!this.articulationEnabled||!this.lipContourEnabled||!this.lipContour||!this.mouth)return false;
+    const {top,bottom}=this.lipContour, m=this.mouth;
+    const roundness=clamp((shape-.5)*2.6,-.75,.75);
+    const gap=m.width*(.014+.112*amount)*amount;
+    const widthScale=clamp(1-roundness*.085,.93,1.07);
+    const modify=(arr,upper)=>arr.map((p,i)=>{
+      const ease=Math.sin(i*Math.PI/(arr.length-1));
+      return {
+        x:m.cx+(p.x-m.cx)*(1+(widthScale-1)*ease),
+        y:p.y+(upper?-gap*.37:gap*.63)*ease
+      };
+    });
+    const upper=modify(top,true),lower=modify(bottom,false).reverse();
+    // Curva morbida attraverso i veri punti del labbro, invece di un'ellisse.
+    const trace=arr=>{
+      ctx.moveTo(arr[0].x,arr[0].y);
+      for(let i=1;i<arr.length-1;i++){
+        const curr=arr[i],next=arr[i+1];
+        ctx.quadraticCurveTo(curr.x,curr.y,(curr.x+next.x)*.5,(curr.y+next.y)*.5);
+      }
+      const last=arr[arr.length-1];
+      ctx.lineTo(last.x,last.y);
+    };
+    const middle=(m.top+m.bottom)*.5;
+    ctx.save();
+    ctx.beginPath();
+    trace(upper);
+    // Collega i contorni all'angolo opposto e percorre il labbro inferiore.
+    ctx.lineTo(lower[0].x,lower[0].y);
+    for(let i=1;i<lower.length-1;i++){
+      const curr=lower[i],next=lower[i+1];
+      ctx.quadraticCurveTo(curr.x,curr.y,(curr.x+next.x)*.5,(curr.y+next.y)*.5);
+    }
+    const last=lower[lower.length-1];
+    ctx.lineTo(last.x,last.y);
+    ctx.closePath();
+    const cavity=ctx.createLinearGradient(m.cx,middle-gap,m.cx,middle+gap);
+    cavity.addColorStop(0,this.lipPalette?.top||'#40252b');
+    cavity.addColorStop(.48,this.lipPalette?.center||'#25151a');
+    cavity.addColorStop(1,this.lipPalette?.bottom||'#5a333b');
+    ctx.fillStyle=cavity;
+    ctx.globalAlpha=clamp(amount*.82,0,.82);
+    ctx.fill();
+    // La luce segue il bordo rilevato: nessun tratto geometrico prefissato.
+    ctx.beginPath();
+    const lipEdge=modify(bottom,false);
+    trace(lipEdge);
+    ctx.strokeStyle=this.lipPalette?.highlight||'rgba(199,135,137,.28)';
+    ctx.globalAlpha=clamp(amount*.24,0,.24);
+    ctx.lineWidth=Math.max(.45,m.width*.008);
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
   setArticulationEnabled(value){
     this.articulationEnabled=Boolean(value);
     if(this.ready&&!this.frame)this.draw(this.level,this.shape);
@@ -849,7 +927,10 @@ export class PhotoAvatarMotion {
       ctx.restore();
     }
 
-    // Fessura interna: curve di Bézier con angoli sottili, anziché un'ellisse nera.
+    // Se FaceMesh ha riconosciuto la forma reale, usa il contorno specifico
+    // della persona. In caso contrario conserva la bocca 2.15.
+    if(this.drawLandmarkMouth(ctx,amount,shape)){ctx.restore();return;}
+    // Fessura interna classica, sempre disponibile come alternativa.
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(cxLeft,middle);
