@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.18 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=2180">
+  <title>VIVA AI 2.19 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=2190">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.18</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.19</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -98,6 +98,12 @@
           </select>
           <small>Puoi cambiarlo anche durante la conversazione: verrà applicato dalla risposta successiva e ricordato su questo browser.</small>
         </label>
+        <label class="consent-line natural-dialogue-setting">
+          <input type="checkbox" id="natural-dialogue-enabled" checked>
+          <span><b>Dialogo spontaneo · novità 2.19</b>
+            <small>Risposte più colloquiali e collegate agli ultimi scambi. Comprende meglio domande brevi come «perché?» o «e poi?». Disattiva per confrontare con la versione precedente.</small>
+          </span>
+        </label>
         <div class="photo-motion-settings">
           <label class="consent-line motion-checkbox"><input type="checkbox" id="photo-motion-enabled" checked><span><b>Anima le labbra · prova gratuita</b><small>Bocca sincronizzata alla voce Gemini. Il battito delle palpebre è disattivato.</small></span></label>
           <div class="voice-help" id="photo-motion-status" role="status">Carica un ritratto frontale per preparare l'animazione.</div>
@@ -161,7 +167,7 @@
         <p class="fineprint">Carica solo foto e campioni vocali che puoi usare legittimamente. L’avatar è generato dall’AI e non rappresenta dichiarazioni autentiche della persona ritratta.</p>
       </section>
       <section class="chat-panel" aria-label="Conversazione">
-        <div class="chat-header"><div><span class="eyebrow">CONVERSAZIONE</span><h2>Parla con <span id="chat-name">Alex</span></h2><p id="chat-subtitle">Una conversazione, infinite domande.</p></div><div class="chat-header-actions">
+        <div class="chat-header"><div><span class="eyebrow">CONVERSAZIONE</span><h2>Parla con <span id="chat-name">Alex</span></h2><p id="chat-subtitle">Una conversazione che segue il filo del discorso.</p></div><div class="chat-header-actions">
           <button class="ghost" id="replay-voice" type="button" hidden title="Leggi nuovamente l’ultima risposta usando la voce Chrome">🔊 Riascolta risposta</button>
           <button class="ghost icon-button" id="clear-chat" title="Azzera la conversazione" type="button">↺</button>
         </div></div>
@@ -183,6 +189,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=2180"></script>
+  <script type="module" src="app.js?v=2190"></script>
 </body>
 </html>
