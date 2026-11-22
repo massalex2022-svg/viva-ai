@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=290';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2100';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -455,6 +455,37 @@ function speakBrowser(text,{direct=false}={}){
 // Prova autonoma: speak() viene eseguito direttamente nel clic,
 // senza timer e senza alcuna chiamata a Gemini. Serve per capire se
 // il dispositivo ChromeOS può emettere la propria voce locale.
+// Diagnostica ChromeOS in due clic distinti per preservare la user activation.
+function resetChromeVoice(){
+  const display=$('chrome-voice-diagnostic');
+  if(!('speechSynthesis' in window)){
+    display.textContent='Sintesi vocale Chrome non disponibile in questo browser.';
+    return;
+  }
+  // Solo reset, NESSUNA nuova frase in questo stesso clic.
+  state.speechJob++;
+  clearBrowserSpeechTimers();
+  if(state.browserDiagnosticTimer!==null)clearTimeout(state.browserDiagnosticTimer);
+  state.browserDiagnosticTimer=null;
+  state.browserDiagnosticUtterance=null;
+  state.browserUtterance=null;
+  motion.setBrowserSpeaking(false);
+  try{
+    speechSynthesis.cancel();
+    // ChromeOS può rimanere in pausa dopo una cancellazione.
+    if(speechSynthesis.paused)speechSynthesis.resume();
+    display.textContent='Reset inviato al motore Chrome. Attendi un secondo, poi premi «Prova voce predefinita».';
+  }catch(err){
+    display.textContent='Errore durante il reset Chrome: '+(err?.message||err);
+    return;
+  }
+  state.browserDiagnosticTimer=setTimeout(()=>{
+    state.browserDiagnosticTimer=null;
+    display.textContent='Stato dopo il reset: speaking='+speechSynthesis.speaking+
+      ', pending='+speechSynthesis.pending+', paused='+speechSynthesis.paused+
+      '. Ora premi «Prova voce predefinita».';
+  },850);
+}
 function testChromeVoice(){
   const display=$('chrome-voice-diagnostic');
   if(!('speechSynthesis' in window)||!('SpeechSynthesisUtterance' in window)){
@@ -465,48 +496,60 @@ function testChromeVoice(){
   state.browserDiagnosticTimer=null;
   refreshVoices();
   const all=state.voices;
-  const localItalian=all.filter(v=>/^it[-_]/i.test(v.lang)&&v.localService);
   const italian=all.filter(v=>/^it[-_]/i.test(v.lang));
-  const voice=localItalian[0]||italian[0]||null;
-  const info='Voci trovate: '+all.length+'; italiane: '+italian.length+'; locali italiane: '+localItalian.length+'.';
-  let started=false,ended=false;
-  const utterance=new SpeechSynthesisUtterance('Ciao! Questa è una prova della voce Chrome.');
+  const localItalian=italian.filter(v=>v.localService);
+  const info='Voci: '+all.length+'; italiane: '+italian.length+
+    '; locali italiane: '+localItalian.length+'.';
+  if(speechSynthesis.speaking||speechSynthesis.pending){
+    display.textContent='Il motore risulta ancora occupato (speaking='+speechSynthesis.speaking+
+      ', pending='+speechSynthesis.pending+', paused='+speechSynthesis.paused+
+      '). Premi «1. Sblocca voce Chrome», attendi un secondo e riprova.';
+    return;
+  }
+  // Nessun nome/ID di voce assegnato: ChromeOS seleziona la propria voce.
+  const utterance=new SpeechSynthesisUtterance('Ciao! Questa è una prova della voce predefinita di Chrome.');
   utterance.lang='it-IT';
-  utterance.rate=.94;
-  if(voice)utterance.voice=voice;
+  utterance.rate=1;
   state.browserDiagnosticUtterance=utterance;
-  display.textContent='Prova voce in corso. '+info;
+  let started=false,done=false;
+  display.textContent='Prova diretta in corso, voce predefinita di Chrome. '+info;
   utterance.onstart=()=>{
     started=true;
-    display.textContent='Chrome segnala che la prova vocale è iniziata. '+info+' Riesci a sentirla?';
+    display.textContent='Chrome dice che la lettura è iniziata. '+info+
+      ' La frase è udibile?';
   };
   utterance.onend=()=>{
-    ended=true;
+    done=true;
     if(state.browserDiagnosticTimer!==null)clearTimeout(state.browserDiagnosticTimer);
     state.browserDiagnosticTimer=null;
     state.browserDiagnosticUtterance=null;
-    display.textContent='Chrome segnala che la prova è terminata. '+info+' Se non hai sentito niente, controlliamo l’uscita audio del browser.';
+    display.textContent='Chrome dice che la lettura è terminata. '+info+
+      ' Dimmi se hai sentito la frase.';
   };
-  utterance.onerror=ev=>{
-    ended=true;
+  utterance.onerror=event=>{
+    done=true;
     if(state.browserDiagnosticTimer!==null)clearTimeout(state.browserDiagnosticTimer);
     state.browserDiagnosticTimer=null;
     state.browserDiagnosticUtterance=null;
-    display.textContent='Errore voce Chrome: '+(ev.error||'sconosciuto')+'. '+info;
+    display.textContent='Errore della voce Chrome predefinita: '+
+      (event?.error||'non specificato')+'. '+info;
   };
   try{
     if(speechSynthesis.paused)speechSynthesis.resume();
-    // Essendo dentro il clic, non ritardare questa chiamata.
+    // Deve avvenire nel clic, senza altri cancel/speak nello stesso gesto.
     speechSynthesis.speak(utterance);
   }catch(err){
     state.browserDiagnosticUtterance=null;
-    display.textContent='Chrome non ha potuto avviare la voce: '+(err?.message||err)+'. '+info;
+    display.textContent='Impossibile avviare la lettura: '+(err?.message||err)+'. '+info;
     return;
   }
   state.browserDiagnosticTimer=setTimeout(()=>{
     state.browserDiagnosticTimer=null;
-    if(!started&&!ended){
-      display.textContent='La prova non parte: '+info+' Motore Chrome (speaking='+speechSynthesis.speaking+', pending='+speechSynthesis.pending+', paused='+speechSynthesis.paused+').';
+    if(!started&&!done){
+      display.textContent='Prova non avviata neanche con voce predefinita. '+info+
+        ' Motore: speaking='+speechSynthesis.speaking+
+        ', pending='+speechSynthesis.pending+', paused='+speechSynthesis.paused+
+        '. Potrebbe essere bloccato il servizio vocale di ChromeOS.';
     }
   },5500);
 }
@@ -789,6 +832,7 @@ $('start-button').addEventListener('click',start);
 $('stop-button').addEventListener('click',stop);
 $('chat-form').addEventListener('submit',(e)=>{e.preventDefault();send($('message-input').value);});
 $('mic-button').addEventListener('click',microphone);
+$('reset-chrome-voice').addEventListener('click',resetChromeVoice);
 $('test-chrome-voice').addEventListener('click',testChromeVoice);
 $('replay-voice').addEventListener('click',()=>{
   if(!state.lastSpokenText)return status('Non c’è ancora una risposta da riascoltare.');
