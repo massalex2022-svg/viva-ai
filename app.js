@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2220';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2230';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -8,7 +8,7 @@ const state = {
   token: sessionStorage.getItem('viva_token') || '',
   messages: [], active: false, busy: false, recognition: null,
   handsFree:false, handsFreeTimer:null, handsFreeIdleRestarts:0, voiceCycleActive:false,
-  audioAwaitingClick:false, audioStartTimer:null,
+  audioAwaitingClick:false, audioStartTimer:null, geminiVoicePending:false,
   voices: [], lastAgentMessage: '', voiceSource:'standard', voiceFile:null, voicePreviewUrl:null,
   convertedVoiceFile:null, playingUrl:null, speechJob:0, voiceEngine:'gemini',
   lastSpokenText:'', browserUtterance:null, browserStartTimer:null, browserWatchdogTimer:null, browserRetryTimer:null,
@@ -197,6 +197,9 @@ function clearGeminiPlaybackRecovery(){
 }
 function stopSpokenAudio() {
   state.speechJob++;
+  state.geminiVoicePending=false;
+  $('retry-last-gemini').hidden=true;
+  $('gemini-voice-issue').textContent='';
   clearGeminiPlaybackRecovery();
   clearBrowserSpeechTimers();
   motion.setBrowserSpeaking(false);
@@ -438,7 +441,7 @@ function showTtsCooldown(until=ttsCooldownUntil()){
  if(!banner)return;
  banner.hidden=!until;
  banner.textContent=until
-  ?'Quota voce Gemini esaurita: ancora circa '+formatTtsWait(until)+'. VIVA AI userà automaticamente Chrome; le risposte testuali Gemini continuano a funzionare.'
+  ?'Quota voce Gemini esaurita: ancora circa '+formatTtsWait(until)+'. VIVA AI non passerà automaticamente alla voce Chrome; le risposte testuali continuano a funzionare.'
   :'';
 }
 function speakBrowser(text,{direct=false}={}){
@@ -751,7 +754,20 @@ async function retryGeminiVoiceNow(){
     button.disabled=false;
   }
 }
-async function speak(text) {
+function showGeminiVoiceIssue(error,until=0){
+  const message=String(error?.message||error||'errore sconosciuto');
+  state.geminiVoicePending=true;
+  state.voiceCycleActive=true;
+  $('retry-last-gemini').hidden=false;
+  const quota=!!until||/quota|resource.exhausted|429|rate.limit|requests.per.day|free.tier/i.test(message);
+  const reason=quota?'Gemini TTS non disponibile per quota o limite di richieste.':'Gemini TTS non ha generato la voce: '+message.slice(0,210);
+  $('gemini-voice-issue').textContent=reason+(until?' Tempo indicativo di attesa: '+formatTtsWait(until)+'.':'')+
+    ' Puoi riprovare Gemini su questa stessa risposta, senza rifare la domanda.';
+  $('audio-state').textContent='● Voce Gemini non disponibile';
+  status(reason+' La risposta scritta resta disponibile; il microfono è in pausa.',true);
+  handsFreeUI();
+}
+async function speak(text,{forceGemini=false}={}) {
   if(state.mode!=='basic') return;
   stopSpokenAudio();
   // La foto regola sorrisi e sopracciglia in modo molto discreto in base
@@ -777,10 +793,9 @@ async function speak(text) {
   }
   if(state.voiceEngine==='gemini') {
     const waitingUntil=ttsCooldownUntil();
-    if(waitingUntil){
+    if(waitingUntil&&!forceGemini){
       showTtsCooldown(waitingUntil);
-      $('audio-state').textContent='◉ Voce Chrome (quota Gemini esaurita)';
-      speakBrowser(text);
+      showGeminiVoiceIssue('Quota voce Gemini in pausa',waitingUntil);
       return;
     }
     showTtsCooldown(0);
@@ -798,16 +813,9 @@ async function speak(text) {
       return;
     } catch(err) {
       if(myJob!==state.speechJob)return;
-      const until=rememberTtsCooldown(err.message);
-      if(until){
-        showTtsCooldown(until);
-        status('Limite gratuito della voce Gemini raggiunto. Uso Chrome fino al ripristino della quota.');
-        $('audio-state').textContent='◉ Voce Chrome (limite Gemini)';
-      }else{
-        status(`Voce Gemini non disponibile: ${err.message}. Uso temporaneamente la voce Chrome.`,true);
-        $('audio-state').textContent='● Voce Chrome alternativa';
-      }
-      speakBrowser(text);
+      const until=rememberTtsCooldown(err?.message||String(err));
+      if(until)showTtsCooldown(until);
+      showGeminiVoiceIssue(err,until);
       return;
     }
   }
@@ -963,7 +971,7 @@ function handsFreeUI(){
   button.setAttribute('aria-pressed',String(on));
   button.classList.toggle('listening',on);
   note.textContent=on
-    ?(state.voiceCycleActive?'Avatar in risposta · premi 🎙 per interromperlo.':'Ascolto continuo attivo · parla quando il microfono si accende.')
+    ?(state.geminiVoicePending?'La voce Gemini non è partita: premi «Riprova voce Gemini»; il microfono attende.':state.voiceCycleActive?'Avatar in risposta · premi 🎙 per interromperlo.':'Ascolto continuo attivo · parla quando il microfono si accende.')
     :'Ascolto continuo spento · microfono soltanto su richiesta.';
 }
 function stopHandsFree(message=''){
@@ -994,7 +1002,7 @@ function voicePlaybackFailed(){
   handsFreeUI();
 }
 function voiceCycleFinished(){
-  if(state.audioAwaitingClick)return;
+  if(state.audioAwaitingClick||state.geminiVoicePending)return;
   state.voiceCycleActive=false;
   handsFreeUI();
   resumeHandsFree(900); // La coda audio deve svuotarsi prima del microfono.
