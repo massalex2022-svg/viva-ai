@@ -2,20 +2,32 @@
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
-const VISION_VERSION = '0.10.22';
+// Stessa versione e doppio CDN del laboratorio WebGL verificato sul Chromebook.
+const VISION_VERSION = '0.10.21';
+const VISION_CDNS = [
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@'+VISION_VERSION,
+  'https://unpkg.com/@mediapipe/tasks-vision@'+VISION_VERSION
+];
 let landmarkerPromise;
 function getLandmarker() {
-  if (!landmarkerPromise) {
-    landmarkerPromise = (async () => {
-      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + VISION_VERSION + '/vision_bundle.mjs');
-      const files = await vision.FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + VISION_VERSION + '/wasm'
-      );
-      return await vision.FaceLandmarker.createFromOptions(files, {
-        baseOptions: {modelAssetPath: FACE_MODEL, delegate: 'CPU'},
-        runningMode: 'IMAGE', numFaces: 1, outputFaceBlendshapes: false
-      });
-    })().catch(e => { landmarkerPromise = null; throw e; });
+  if(!landmarkerPromise){
+    landmarkerPromise=(async()=>{
+      const errors=[];
+      for(const base of VISION_CDNS){
+        try{
+          const vision=await import(base+'/vision_bundle.mjs');
+          const files=await vision.FilesetResolver.forVisionTasks(base+'/wasm');
+          return await vision.FaceLandmarker.createFromOptions(files,{
+            baseOptions:{modelAssetPath:FACE_MODEL,delegate:'CPU'},
+            runningMode:'IMAGE',numFaces:1,outputFaceBlendshapes:false
+          });
+        }catch(err){
+          errors.push((err?.message||String(err)));
+          console.warn('VIVA AI MediaPipe: provo il server alternativo.',err);
+        }
+      }
+      throw Error('Rilevamento automatico non raggiungibile. '+errors.join(' | '));
+    })().catch(err=>{landmarkerPromise=null;throw err});
   }
   return landmarkerPromise;
 }
