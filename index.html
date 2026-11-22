@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 1.5 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=150">
+  <title>VIVA AI 2.1 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=210">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 1.5</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.1</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -81,7 +81,7 @@
             </label>
             <label class="consent-line face-option">
               <input type="checkbox" id="expression-enabled">
-              <span><b>Micro-espressioni</b><small>Movimenti delicati delle sopracciglia mentre parla · facoltativi</small></span>
+              <span><b>Espressioni 2.0 · WebGL</b><small>Sopracciglia e sorriso deformati nella fotografia durante la voce Gemini · attiva per provare</small></span>
             </label>
             <label class="consent-line face-option">
               <input type="checkbox" id="head-enabled">
@@ -94,7 +94,7 @@
             <output id="motion-intensity-label" for="motion-intensity">Delicata</output>
           </label>
           <div class="motion-buttons">
-            <button class="ghost" type="button" id="expression-test">◉ Prova micro-espressioni</button>
+            <button class="ghost" type="button" id="expression-test">◉ Prova espressioni WebGL</button>
             <button class="ghost" type="button" id="motion-test">▶ Prova le labbra</button>
             <button class="ghost" type="button" id="blink-test">◉ Prova palpebre naturali</button>
             <button class="ghost" type="button" id="eyes-pick">◎ Indica gli occhi sulla foto</button>
@@ -102,7 +102,7 @@
           </div>
         </div>
         <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Voce AI + labbra 2D</b><small>Foto 2D · Gemini</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
-        <div class="mode-info" id="mode-info">La foto può animare labbra, palpebre e piccole espressioni delle sopracciglia. L’effetto è 2D e non equivale a un video AI fotorealistico.</div>
+        <div class="mode-info" id="mode-info">Gemini parla, le labbra e le palpebre continuano a muoversi. Attivando «Espressioni 2.0 · WebGL», il ritratto può deformare sopracciglia e sorriso durante la risposta. È una simulazione 2D, non un video AI fotorealistico.</div>
         <button class="primary" id="start-button" type="button">Avvia conversazione <span>↗</span></button>
         <button class="ghost danger" id="stop-button" type="button" hidden>Termina conversazione</button>
         <p class="fineprint">Carica solo foto e campioni vocali che puoi usare legittimamente. L’avatar è generato dall’AI e non rappresenta dichiarazioni autentiche della persona ritratta.</p>
@@ -127,6 +127,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=150"></script>
+  <script type="module" src="app.js?v=210"></script>
 </body>
 </html>
