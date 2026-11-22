@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=260';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=270';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -297,6 +297,46 @@ function voiceEngineChange(next) {
   $('ai-voice-choice').disabled=state.voiceSource==='custom'||state.voiceEngine==='browser';
   status(state.voiceEngine==='gemini'?'Voce Gemini selezionata. Richiede un Worker aggiornato e quota gratuita disponibile.':'Voce Chrome selezionata. Puoi iniziare subito.');
 }
+// VIVA AI 2.7 — non ripetere richieste TTS con quota gratuita esaurita.
+const TTS_COOLDOWN_KEY='viva_gemini_tts_cooldown_v27';
+function parseTtsCooldownMs(message){
+ const value=String(message||'');
+ if(!/rate.limit.exceeded|quota.exceeded|resource.exhausted|requests.per.day|free.tier/i.test(value))return 0;
+ const match=value.match(/(?:retry|try again)\s+in\s+((?:\s*\d+\s*[dhms]\s*)+)/i);
+ if(!match)return 0;
+ const unitMs={d:86400000,h:3600000,m:60000,s:1000};
+ let total=0;
+ for(const part of match[1].matchAll(/(\d+)\s*([dhms])/gi)){total+=Number(part[1])*unitMs[part[2].toLowerCase()];}
+ return Number.isFinite(total)&&total>0?Math.min(total,72*3600000):0;
+}
+function ttsCooldownUntil(){
+ try{
+  const until=Number(localStorage.getItem(TTS_COOLDOWN_KEY));
+  if(Number.isFinite(until)&&until>Date.now())return until;
+  if(until)localStorage.removeItem(TTS_COOLDOWN_KEY);
+ }catch{}
+ return 0;
+}
+function rememberTtsCooldown(message){
+ const ms=parseTtsCooldownMs(message);
+ if(!ms)return 0;
+ const until=Date.now()+ms+15000;
+ try{localStorage.setItem(TTS_COOLDOWN_KEY,String(until));}catch{}
+ return until;
+}
+function formatTtsWait(until){
+ const minutes=Math.max(1,Math.ceil((until-Date.now())/60000));
+ const hours=Math.floor(minutes/60),remaining=minutes%60;
+ return hours?hours+' h '+remaining+' min':minutes+' min';
+}
+function showTtsCooldown(until=ttsCooldownUntil()){
+ const banner=$('tts-quota-status');
+ if(!banner)return;
+ banner.hidden=!until;
+ banner.textContent=until
+  ?'Quota voce Gemini esaurita: ancora circa '+formatTtsWait(until)+'. VIVA AI userà automaticamente Chrome; le risposte testuali Gemini continuano a funzionare.'
+  :'';
+}
 function speakBrowser(text) {
   if(!('speechSynthesis' in window)) throw Error('Sintesi vocale non disponibile in questo browser.');
   const utterance=new SpeechSynthesisUtterance(text);
@@ -341,6 +381,14 @@ async function speak(text) {
     return;
   }
   if(state.voiceEngine==='gemini') {
+    const waitingUntil=ttsCooldownUntil();
+    if(waitingUntil){
+      showTtsCooldown(waitingUntil);
+      $('audio-state').textContent='◉ Voce Chrome (quota Gemini esaurita)';
+      speakBrowser(text);
+      return;
+    }
+    showTtsCooldown(0);
     $('audio-state').textContent='◉ Creo la voce...';
     try {
       const normalized=text.replace(/\*\*/g,'').trim().slice(0,1600);
@@ -350,12 +398,20 @@ async function speak(text) {
       const decoded=atob(result.audio);
       const array=new Uint8Array(decoded.length);
       for(let i=0;i<decoded.length;i++) array[i]=decoded.charCodeAt(i);
+      showTtsCooldown(0);
       await playAudioBlob(new Blob([array],{type:'audio/wav'}),myJob);
       return;
     } catch(err) {
       if(myJob!==state.speechJob)return;
-      status(`Voce Gemini non disponibile: ${err.message}. Uso temporaneamente la voce Chrome.`,true);
-      $('audio-state').textContent='● Voce Chrome alternativa';
+      const until=rememberTtsCooldown(err.message);
+      if(until){
+        showTtsCooldown(until);
+        status('Limite gratuito della voce Gemini raggiunto. Uso Chrome fino al ripristino della quota.');
+        $('audio-state').textContent='◉ Voce Chrome (limite Gemini)';
+      }else{
+        status(`Voce Gemini non disponibile: ${err.message}. Uso temporaneamente la voce Chrome.`,true);
+        $('audio-state').textContent='● Voce Chrome alternativa';
+      }
       speakBrowser(text);
       return;
     }
@@ -552,6 +608,7 @@ applyMotionValues(
   readMotionValue(MOTION_STORAGE.mouth,MOTION_DEFAULTS.mouth,.4,2.4),
   readMotionValue(MOTION_STORAGE.brow,MOTION_DEFAULTS.brow,0,150)
 );
+showTtsCooldown();
 $('conversation-style').addEventListener('change',e=>{
   try{localStorage.setItem('viva_conversation_style_26',conversationStyle());}catch{}
   $('status-message').textContent='Stile aggiornato: sarà applicato dalla prossima risposta.';
