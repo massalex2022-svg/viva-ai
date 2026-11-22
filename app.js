@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2130';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2140';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -222,7 +222,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'Anteprima gratuita: voce Gemini, labbra sincronizzate e leggeri movimenti WebGL di sopracciglia, guance e mandibola. Occhi e palpebre fermi; non è un video AI fotorealistico.'
+    ? 'Anteprima gratuita: voce Gemini, labbra sincronizzate, guance e sopracciglia che seguono il ritmo della voce. Sorriso discreto quando il testo è allegro. Occhi fermi; non è un video AI fotorealistico.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -674,6 +674,9 @@ async function retryGeminiVoiceNow(){
 async function speak(text) {
   if(state.mode!=='basic') return;
   stopSpokenAudio();
+  // La foto regola sorrisi e sopracciglia in modo molto discreto in base
+  // alla risposta già ricevuta, senza chiamate AI aggiuntive.
+  motion.setResponseMood(text);
   state.lastSpokenText=String(text||'').trim();
   $('replay-voice').hidden=!state.lastSpokenText;
   const myJob=state.speechJob;
