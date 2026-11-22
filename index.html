@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.5 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=250">
+  <title>VIVA AI 2.6 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=260">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.5</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.6</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -69,7 +69,16 @@
             <div class="voice-help" id="voice-clone-status">La clonazione richiede un motore vocale Chatterbox collegato al Worker. Il caricamento e l'ascolto del campione sono già disponibili gratuitamente.</div>
           </div>
         </section>
-        <label class="field personality-field">Come deve comportarsi?<textarea id="personality" rows="3" maxlength="900" placeholder="Es. cordiale, curioso, brillante e spiritoso">Sei un assistente amichevole, competente e naturale. Rispondi in italiano, in maniera chiara e non ripetitiva. Ricorda ciò che è stato appena detto nella conversazione.</textarea></label>
+        <label class="field personality-field">Come deve comportarsi?<textarea id="personality" rows="3" maxlength="900" placeholder="Es. cordiale, curioso, brillante e spiritoso">Sei un interlocutore cordiale, curioso e attento. Parla in italiano naturale, rispondi alle domande e segui il filo della conversazione senza ripeterti.</textarea></label>
+        <label class="field conversation-style-field" for="conversation-style">
+          <span>Stile della conversazione</span>
+          <select id="conversation-style" aria-label="Stile della conversazione">
+            <option value="natural">Naturale · spontaneo e cordiale</option>
+            <option value="lively">Vivace · espressivo e spiritoso</option>
+            <option value="concise">Sintetico · diretto e chiaro</option>
+          </select>
+          <small>Puoi cambiarlo anche durante la conversazione: verrà applicato dalla risposta successiva e ricordato su questo browser.</small>
+        </label>
         <div class="photo-motion-settings">
           <label class="consent-line motion-checkbox"><input type="checkbox" id="photo-motion-enabled" checked><span><b>Anima le labbra · prova gratuita</b><small>Bocca sincronizzata alla voce Gemini. Il battito delle palpebre è disattivato.</small></span></label>
           <div class="voice-help" id="photo-motion-status" role="status">Carica un ritratto frontale per preparare l'animazione.</div>
@@ -128,6 +137,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=250"></script>
+  <script type="module" src="app.js?v=260"></script>
 </body>
 </html>
