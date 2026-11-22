@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=270';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=280';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -9,6 +9,7 @@ const state = {
   messages: [], active: false, busy: false, recognition: null,
   voices: [], lastAgentMessage: '', voiceSource:'standard', voiceFile:null, voicePreviewUrl:null,
   convertedVoiceFile:null, playingUrl:null, speechJob:0, voiceEngine:'gemini',
+  lastSpokenText:'', browserUtterance:null, browserStartTimer:null, browserWatchdogTimer:null, browserRetryTimer:null,
 };
 
 const motion = new PhotoAvatarMotion({
@@ -150,11 +151,19 @@ function uploadVoice(event) {
   $('voice-sample-info').textContent=`Pronto: ${file.name} · ${(file.size/1048576).toFixed(2)} MB. Premi ▶ per ascoltare il campione.`;
   status('Campione caricato solo nel browser. Non è ancora stato inviato al server.');
 }
+function clearBrowserSpeechTimers(){
+  for(const timer of [state.browserStartTimer,state.browserWatchdogTimer,state.browserRetryTimer]){
+    if(timer!==null)clearTimeout(timer);
+  }
+  state.browserStartTimer=null;state.browserWatchdogTimer=null;state.browserRetryTimer=null;
+}
 function stopSpokenAudio() {
   state.speechJob++;
+  clearBrowserSpeechTimers();
   motion.setBrowserSpeaking(false);
   motion.clearSpeechTimeline();
   if('speechSynthesis' in window) speechSynthesis.cancel();
+  state.browserUtterance=null;
   const audio=$('generated-audio');
   audio.pause(); audio.removeAttribute('src'); audio.load(); audio.hidden=true;
   if(state.playingUrl) URL.revokeObjectURL(state.playingUrl);
@@ -338,15 +347,103 @@ function showTtsCooldown(until=ttsCooldownUntil()){
   ?'Quota voce Gemini esaurita: ancora circa '+formatTtsWait(until)+'. VIVA AI userà automaticamente Chrome; le risposte testuali Gemini continuano a funzionare.'
   :'';
 }
-function speakBrowser(text) {
-  if(!('speechSynthesis' in window)) throw Error('Sintesi vocale non disponibile in questo browser.');
-  const utterance=new SpeechSynthesisUtterance(text);
-  utterance.lang='it-IT';utterance.rate=.95;utterance.pitch=$('voice-choice').value==='male'?.87:1.05;
-  const voice=chooseVoice();if(voice) utterance.voice=voice;
-  utterance.onstart=()=>{$('audio-state').textContent='◉ Sta parlando';motion.setBrowserSpeaking(true);};
-  utterance.onend=()=>{$('audio-state').textContent='● In ascolto';motion.setBrowserSpeaking(false);};
-  utterance.onerror=()=>{$('audio-state').textContent='● Audio non disponibile';motion.setBrowserSpeaking(false);};
-  speechSynthesis.speak(utterance);
+function speakBrowser(text,{direct=false}={}){
+  if(!('speechSynthesis' in window))throw Error('Sintesi vocale Chrome non disponibile.');
+  const clean=String(text||'').replace(/\\*\\*/g,'').trim();
+  if(!clean)return;
+  const job=state.speechJob;
+  state.lastSpokenText=clean;
+  $('replay-voice').hidden=false;
+  clearBrowserSpeechTimers();
+  motion.setBrowserSpeaking(false);
+  // Non accumulare frasi: ogni risposta sostituisce la sintesi precedente.
+  try{speechSynthesis.cancel();}catch(err){console.warn('VIVA AI: cancel voce',err);}
+  function begin(attempt){
+    if(job!==state.speechJob||state.mode!=='basic')return;
+    let started=false,finished=false;
+    const utterance=new SpeechSynthesisUtterance(clean);
+    state.browserUtterance=utterance; // Evita che Chrome elimini l'oggetto durante la lettura.
+    utterance.lang='it-IT';
+    utterance.rate=.95;
+    utterance.pitch=$('voice-choice').value==='male'?.87:1.05;
+    // Aggiorna voci che Chrome potrebbe aver caricato in ritardo.
+    refreshVoices();
+    const voice=chooseVoice();if(voice)utterance.voice=voice;
+    utterance.onstart=()=>{
+      if(job!==state.speechJob||finished)return;
+      started=true;
+      if(state.browserWatchdogTimer!==null)clearTimeout(state.browserWatchdogTimer);
+      state.browserWatchdogTimer=null;
+      $('audio-state').textContent='◉ Sta parlando (Chrome)';
+      motion.setBrowserSpeaking(true);
+    };
+    utterance.onend=()=>{
+      if(job!==state.speechJob||finished)return;
+      finished=true;
+      clearBrowserSpeechTimers();
+      state.browserUtterance=null;
+      $('audio-state').textContent='● In ascolto';
+      motion.setBrowserSpeaking(false);
+    };
+    utterance.onerror=(event)=>{
+      if(job!==state.speechJob||finished)return;
+      finished=true;
+      if(state.browserWatchdogTimer!==null)clearTimeout(state.browserWatchdogTimer);
+      state.browserWatchdogTimer=null;
+      state.browserUtterance=null;
+      motion.setBrowserSpeaking(false);
+      // L'errore "interrupted"/"canceled" deriva spesso da una nuova risposta.
+      if(event?.error==='interrupted'||event?.error==='canceled')return;
+      if(!started&&attempt===0){
+        retry();
+      }else{
+        $('audio-state').textContent='● Voce Chrome bloccata';
+        status('La voce Chrome non è partita. Premi «Riascolta risposta» per riattivarla.',true);
+      }
+    };
+    function retry(){
+      if(job!==state.speechJob)return;
+      try{speechSynthesis.cancel();}catch{}
+      motion.setBrowserSpeaking(false);
+      state.browserUtterance=null;
+      $('audio-state').textContent='◉ Riavvio voce Chrome...';
+      state.browserRetryTimer=setTimeout(()=>{
+        state.browserRetryTimer=null;
+        if(job!==state.speechJob)return;
+        begin(1);
+      },200);
+    }
+    try{
+      if(speechSynthesis.paused)speechSynthesis.resume();
+      speechSynthesis.speak(utterance);
+    }catch(err){
+      console.warn('VIVA AI: voce Chrome',err);
+      if(attempt===0)retry();
+      else{
+        state.browserUtterance=null;
+        $('audio-state').textContent='● Voce Chrome bloccata';
+        status('Chrome non riesce a leggere la risposta. Premi «Riascolta risposta».',true);
+      }
+      return;
+    }
+    state.browserWatchdogTimer=setTimeout(()=>{
+      state.browserWatchdogTimer=null;
+      if(job!==state.speechJob||started||finished)return;
+      finished=true; // Non confondere gli eventi della prima prova con la seconda.
+      if(attempt===0)retry();
+      else{
+        state.browserUtterance=null;
+        $('audio-state').textContent='● Voce Chrome bloccata';
+        status('Chrome ha preparato la risposta ma non ha avviato la voce. Premi «Riascolta risposta» per riprovare.',true);
+      }
+    },2800);
+  }
+  // Dopo cancel() concedi al motore Chrome di svuotare la vecchia coda.
+  if(direct)begin(0);
+  else{
+    $('audio-state').textContent='◉ Avvio voce Chrome...';
+    state.browserStartTimer=setTimeout(()=>{state.browserStartTimer=null;begin(0);},160);
+  }
 }
 async function playAudioBlob(blob,myJob) {
   if(myJob!==state.speechJob) return;
@@ -366,6 +463,8 @@ async function playAudioBlob(blob,myJob) {
 async function speak(text) {
   if(state.mode!=='basic') return;
   stopSpokenAudio();
+  state.lastSpokenText=String(text||'').trim();
+  $('replay-voice').hidden=!state.lastSpokenText;
   const myJob=state.speechJob;
   if(state.voiceSource==='custom') {
     if(!state.voiceFile || !$('voice-consent').checked) throw Error('Manca il campione vocale autorizzato.');
@@ -625,9 +724,17 @@ $('start-button').addEventListener('click',start);
 $('stop-button').addEventListener('click',stop);
 $('chat-form').addEventListener('submit',(e)=>{e.preventDefault();send($('message-input').value);});
 $('mic-button').addEventListener('click',microphone);
+$('replay-voice').addEventListener('click',()=>{
+  if(!state.lastSpokenText)return status('Non c’è ancora una risposta da riascoltare.');
+  if(state.mode!=='basic')return status('Il riascolto Chrome è disponibile nella modalità fotografica.');
+  const answer=state.lastSpokenText;
+  stopSpokenAudio();
+  try{speakBrowser(answer,{direct:true});}
+  catch(err){status('Voce Chrome non disponibile: '+err.message,true);}
+});
 $('clear-chat').addEventListener('click',()=>{
   if (state.mode==='live'&&state.active) return status('Termina la videochiamata per azzerare la cronologia D-ID.',true);
-  state.messages=[];state.lastAgentMessage='';$('chat-scroll').innerHTML='';
+  state.messages=[];state.lastAgentMessage='';state.lastSpokenText='';$('replay-voice').hidden=true;$('chat-scroll').innerHTML='';
   addMessage('assistant','Conversazione azzerata. Di cosa vuoi parlare?');
   status('Cronologia ripulita.');
 });
