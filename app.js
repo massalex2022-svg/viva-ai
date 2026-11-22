@@ -643,6 +643,7 @@ async function playAudioBlob(blob,myJob) {
     voiceCycleFinished();
   };
   audio.onplay=()=>{
+    if(myJob!==state.speechJob)return;
     $('audio-state').textContent='◉ Sta parlando';
     state.voiceCycleActive=true;
     if(state.recognition){try{state.recognition.stop()}catch{}}
