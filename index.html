@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.14 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=2140">
+  <title>VIVA AI 2.15 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=2150">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.14</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.15</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -111,6 +111,12 @@
               <span><b>Micro inclinazione della testa</b><small>Sperimentale · disattivata per evitare movimenti artificiali</small></span>
             </label>
           </div>
+          <label class="consent-line motion-checkbox lip-articulation-option">
+            <input type="checkbox" id="lip-articulation-enabled" checked>
+            <span><b>Articolazione labbra più naturale · novità</b>
+              <small>La forma delle labbra cambia lievemente con il timbro della voce Gemini e il colore della bocca viene adattato alla fotografia. Disattiva per confrontare con VIVA AI 2.14.</small>
+            </span>
+          </label>
           <label class="motion-sensitivity" for="motion-intensity">
             <span>Apertura della bocca · voce Gemini</span>
             <input id="motion-intensity" type="range" min="0.4" max="2.4" step="0.05" value="1.2">
@@ -121,7 +127,7 @@
             <input id="brow-intensity" type="range" min="0" max="150" step="5" value="35">
             <output id="brow-intensity-label" for="brow-intensity">35%</output>
           </label>
-          <p class="motion-settings-hint">Movimento del viso leggero e locale: nessuna oscillazione della fotografia. Regolazioni conservate; occhi e palpebre sempre fermi. La funzione WebGL può essere disattivata se non ti piace il risultato.</p>
+          <p class="motion-settings-hint">Espressioni leggere, articolazione delle labbra regolabile e nessuna oscillazione della fotografia. Le variazioni di forma derivano da indizi audio, non da un riconoscimento preciso dei fonemi. Occhi e palpebre sempre fermi.</p>
           <div class="motion-buttons">
             <button class="ghost" type="button" id="expression-test">◉ Prova sorrisi ed espressioni</button>
             <button class="ghost" type="button" id="motion-test">▶ Prova ritmo delle labbra</button>
@@ -130,7 +136,7 @@
             <button class="ghost" type="button" id="motion-reset">↺ Ripristina regolazioni</button>
           </div>
         </div>
-        <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Volto animato + voce AI</b><small>Foto · Gemini · micro-espressioni</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
+        <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Volto animato + voce AI</b><small>Foto · Gemini · labbra adattive</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
         <div class="mode-info" id="mode-info">Voce Gemini e labbra sincronizzate come prima. Aggiunta una micro-deformazione della zona inferiore del viso durante il parlato, senza muovere la fotografia nel suo insieme. Non è un video AI fotorealistico.</div>
         <button class="primary" id="start-button" type="button">Avvia conversazione <span>↗</span></button>
         <button class="ghost danger" id="stop-button" type="button" hidden>Termina conversazione</button>
@@ -159,6 +165,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=2140"></script>
+  <script type="module" src="app.js?v=2150"></script>
 </body>
 </html>
