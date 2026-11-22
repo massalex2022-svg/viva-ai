@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.22 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=2220">
+  <title>VIVA AI 2.23 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=2230">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.22</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.23</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -58,11 +58,11 @@
                 </select>
               </label>
             </div>
-            <div class="voice-help">La voce AI Gemini è soggetta a un limite gratuito giornaliero. Se la quota termina, Chrome può continuare a leggere le risposte senza spese; VIVA AI riproverà Gemini dopo il tempo indicato dal servizio.</div>
+            <div class="voice-help">La voce AI Gemini è soggetta a un limite gratuito giornaliero. Se Gemini TTS esaurisce la quota, la risposta resterà scritta e potrai riprovare esplicitamente la voce Gemini. Chrome non verrà usato automaticamente.</div>
             <div id="tts-quota-status" class="voice-help" role="status" aria-live="polite" hidden></div>
             <div class="gemini-tts-recheck">
               <button type="button" class="ghost" id="retry-gemini-tts">🔄 Riprova ora voce Gemini TTS</button>
-              <div id="gemini-tts-test-result" class="voice-help" role="status" aria-live="polite">La prova richiede una sola generazione vocale Gemini. Se disponibile, riattiva la voce AI naturale; altrimenti continua a funzionare Chrome.</div>
+              <div id="gemini-tts-test-result" class="voice-help" role="status" aria-live="polite">La prova richiede una generazione vocale Gemini. Se la quota non è disponibile, le risposte scritte continueranno a funzionare.</div>
             </div>
             <div class="chrome-voice-check">
               <label class="field" for="chrome-voice-choice">Prova una voce italiana di Chrome
@@ -168,7 +168,7 @@
       </section>
       <section class="chat-panel" aria-label="Conversazione">
         <div class="chat-header"><div><span class="eyebrow">CONVERSAZIONE</span><h2>Parla con <span id="chat-name">Alex</span></h2><p id="chat-subtitle">Una conversazione che segue il filo del discorso, anche a mani libere.</p></div><div class="chat-header-actions">
-          <button class="ghost" id="replay-voice" type="button" hidden title="Leggi nuovamente l’ultima risposta usando la voce Chrome">🔊 Riascolta risposta</button>
+          <button class="ghost" id="replay-voice" type="button" hidden title="Riascolta la risposta con il motore vocale selezionato">🔊 Riascolta risposta</button>
           <button class="ghost icon-button" id="clear-chat" title="Azzera la conversazione" type="button">↺</button>
         </div></div>
         <div class="chat-scroll" id="chat-scroll" role="log" aria-live="polite" aria-relevant="additions">
@@ -177,6 +177,8 @@
         <div class="chat-bottom"><audio id="generated-audio" controls hidden aria-label="Riproduci la voce generata da Gemini"></audio>
           <div class="voice-playback-recovery">
             <button id="play-gemini-audio" class="primary" type="button" hidden>▶ Ascolta risposta Gemini</button>
+            <button id="retry-last-gemini" class="primary" type="button" hidden>↻ Riprova voce Gemini sull’ultima risposta</button>
+            <div id="gemini-voice-issue" role="status" aria-live="polite"></div>
             <div id="voice-playback-status" role="status" aria-live="polite"></div>
           </div>
           <div class="handsfree-panel">
@@ -200,6 +202,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=2220"></script>
+  <script type="module" src="app.js?v=2230"></script>
 </body>
 </html>
