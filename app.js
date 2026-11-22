@@ -808,7 +808,9 @@ async function speak(text,{forceGemini=false}={}) {
       const decoded=atob(result.audio);
       const array=new Uint8Array(decoded.length);
       for(let i=0;i<decoded.length;i++) array[i]=decoded.charCodeAt(i);
-      showTtsCooldown(0);
+      // Una prova TTS riuscita annulla anche un eventuale cooldown locale
+      // precedente: le domande successive devono usare Gemini, non restare bloccate.
+      clearTtsCooldown();
       await playAudioBlob(new Blob([array],{type:'audio/wav'}),myJob);
       return;
     } catch(err) {
