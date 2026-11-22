@@ -416,7 +416,7 @@ function speakBrowser(text,{direct=false}={}){
     state.browserUtterance=utterance; // Evita che Chrome elimini l'oggetto durante la lettura.
     utterance.lang='it-IT';
     utterance.rate=.95;
-    utterance.pitch=$('voice-choice').value==='male'?.87:1.05;
+    utterance.pitch=chromeVoiceSelection()==='auto' ? ($('voice-choice').value==='male'?.93:1.02) : 1;
     // Aggiorna voci che Chrome potrebbe aver caricato in ritardo.
     refreshVoices();
     const voice=chooseVoice();if(voice)utterance.voice=voice;
