@@ -99,7 +99,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
+    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
     this.manualPending=false;this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');this.onAudioStop();
     this.updateDisplay();
@@ -750,10 +750,10 @@ export class PhotoAvatarMotion {
     const middle=(m.top+m.bottom)*.5;
     const span=width*clamp(.75+(shape-.5)*.32,.66,.84);
     const radiusX=span*.5;
-    const opening=width*(.014+.15*amount)*amount;
+    const opening=width*(.012+.125*amount)*amount;
     const halfHeight=Math.max(.7,Math.min(width*.20,Math.max((m.bottom-m.top)*.5,0)+opening*.85));
     const cxLeft=x-radiusX,cxRight=x+radiusX;
-    const lowerShift=clamp(opening*.48,0,width*.065);
+    const lowerShift=clamp(opening*.39,0,width*.050);
 
     // Muovi lievemente il labbro inferiore usando texture dalla stessa fotografia.
     // La maschera arrotondata evita una cucitura rettangolare visibile.
@@ -782,7 +782,7 @@ export class PhotoAvatarMotion {
     cavity.addColorStop(.43,'#25151a');
     cavity.addColorStop(1,'#5a333b');
     ctx.fillStyle=cavity;
-    ctx.globalAlpha=clamp(amount*.91,0,.91);
+    ctx.globalAlpha=clamp(amount*.81,0,.81);
     ctx.fill();
 
     // Leggera luce sul labbro inferiore, attenuata per evitare contorni caricaturali.
