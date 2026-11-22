@@ -622,25 +622,32 @@ export class PhotoAvatarMotion {
   updateLipPalette(){
     this.lipPalette=null;
     if(!this.source||!this.mouth)return;
-    const {cx,top,bottom,width}=this.mouth;
-    const ctx=this.source.getContext?.('2d',{willReadFrequently:true});
-    if(!ctx||typeof ctx.getImageData!=='function')return;
-    const w=this.source.width,h=this.source.height;
-    if(!w||!h)return;
-    const y=clamp(Math.round((top+bottom)*.5),0,h-1);
-    const samples=[-0.12,0,0.12].map(dx=>{
-      const x=clamp(Math.round(cx+width*dx),0,w-1);
-      return ctx.getImageData(x,y,1,1).data;
-    });
-    const base=[0,1,2].map(ch=>samples.reduce((sum,p)=>sum+p[ch],0)/samples.length);
-    if(!base.every(Number.isFinite))return;
-    const color=(scale,lift=0)=>'rgb('+base.map((v,i)=>Math.round(clamp(v*scale+lift+(i===0?4:0),0,255))).join(',')+')';
-    this.lipPalette={
-      top:color(.32,5),
-      center:color(.18,4),
-      bottom:color(.36,9),
-      highlight:color(.92,27)
-    };
+    try{
+      const {cx,top,bottom,width}=this.mouth;
+      const ctx=this.source.getContext?.('2d',{willReadFrequently:true});
+      if(!ctx||typeof ctx.getImageData!=='function')return;
+      const w=this.source.width,h=this.source.height;
+      if(!w||!h)return;
+      const y=clamp(Math.round((top+bottom)*.5),0,h-1);
+      const samples=[-0.12,0,0.12].map(dx=>{
+        const x=clamp(Math.round(cx+width*dx),0,w-1);
+        return ctx.getImageData(x,y,1,1).data;
+      });
+      const base=[0,1,2].map(ch=>samples.reduce((sum,p)=>sum+p[ch],0)/samples.length);
+      if(!base.every(Number.isFinite))return;
+      const color=(scale,lift=0)=>'rgb('+base.map((v,i)=>
+        Math.round(clamp(v*scale+lift+(i===0?4:0),0,255))).join(',')+')';
+      this.lipPalette={
+        top:color(.32,5),
+        center:color(.18,4),
+        bottom:color(.36,9),
+        highlight:color(.92,27)
+      };
+    }catch(err){
+      // L'effetto di labbra resta operativo anche senza campionamento immagine.
+      this.lipPalette=null;
+      console.warn('VIVA AI: colore labbra dalla foto non disponibile',err);
+    }
   }
   setIntensity(value) {
     this.intensity=clamp(Number(value)||1.2,.4,2.4);
@@ -864,7 +871,7 @@ export class PhotoAvatarMotion {
     ctx.moveTo(x-radiusX*.78,middle+halfHeight*.39);
     ctx.quadraticCurveTo(x,middle+halfHeight*1.3,x+radiusX*.78,middle+halfHeight*.39);
     ctx.strokeStyle=this.articulationEnabled&&this.lipPalette?this.lipPalette.highlight:'rgba(199,135,137,.28)';
-    ctx.globalAlpha=this.articulationEnabled&&this.lipPalette?.highlight?.includes('rgb')?.28:1;
+    ctx.globalAlpha=this.articulationEnabled&&this.lipPalette?.highlight ? .28 : 1;
     ctx.lineWidth=Math.max(.5,width*.010)*clamp(amount,.1,1);
     ctx.stroke();
     ctx.restore();
