@@ -1,4 +1,4 @@
-/* VIVA AI 2.14 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
+/* VIVA AI 2.15 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -40,6 +40,7 @@ export class PhotoAvatarMotion {
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=1.20; this.browIntensity=.35; this.freq=null;
+    this.articulationEnabled=true;this.lipPalette=null;
     this.lastFrameTime=0;this.speechTimeline=null;
     this.eyes=[];this.blinkEnabled=false;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
@@ -101,7 +102,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;this.responseMood='neutral';if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
+    this.ready=false; this.mouth=null;this.lipPalette=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;this.responseMood='neutral';if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
     this.manualPending=false;this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');this.onAudioStop();
     this.updateDisplay();
@@ -140,6 +141,7 @@ export class PhotoAvatarMotion {
       this.browAnchors=this.eyes.map(eye=>brows.reduce((best,p)=>
         Math.abs(p.x-eye.cx)<Math.abs(best.x-eye.cx)?p:best,brows[0]));
       this.ready=true;
+      this.updateLipPalette();
       this.setupLids();this.setupBrows();
       if(this.expressionEnabled)void this.prepareWarp();
       this.level=0; this.draw(0); this.updateDisplay();
@@ -189,7 +191,7 @@ export class PhotoAvatarMotion {
     this.source.getContext('2d').drawImage(this.photo,0,0,w,h);
     const width=clamp(w*.13,22,Math.max(23,w*.2));
     this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
-    this.ready=true;this.manualPending=false;this.photo.classList.remove('select-mouth');
+    this.ready=true;this.updateLipPalette();this.manualPending=false;this.photo.classList.remove('select-mouth');
     this.setupLids();this.setupBrows();
     if(this.warp)this.warp.ready=false;
     if(this.expressionEnabled)void this.prepareWarp();
@@ -317,7 +319,7 @@ export class PhotoAvatarMotion {
     if(this.warp?.ready)return true;
     try{
       if(!this.warpConstructor){
-        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=2140');
+        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=2150');
         const module=await this.warpModulePromise;
         if(!this.expressionEnabled)return false;
         this.warpConstructor=module.FaceWarp;
@@ -611,6 +613,35 @@ export class PhotoAvatarMotion {
       }
     }
   }
+  setArticulationEnabled(value){
+    this.articulationEnabled=Boolean(value);
+    if(this.ready&&!this.frame)this.draw(this.level,this.shape);
+  }
+  // I colori dell'interno bocca derivano dalla foto originale, per
+  // evitare una cavità identica e troppo scura su tutti i volti.
+  updateLipPalette(){
+    this.lipPalette=null;
+    if(!this.source||!this.mouth)return;
+    const {cx,top,bottom,width}=this.mouth;
+    const ctx=this.source.getContext?.('2d',{willReadFrequently:true});
+    if(!ctx||typeof ctx.getImageData!=='function')return;
+    const w=this.source.width,h=this.source.height;
+    if(!w||!h)return;
+    const y=clamp(Math.round((top+bottom)*.5),0,h-1);
+    const samples=[-0.12,0,0.12].map(dx=>{
+      const x=clamp(Math.round(cx+width*dx),0,w-1);
+      return ctx.getImageData(x,y,1,1).data;
+    });
+    const base=[0,1,2].map(ch=>samples.reduce((sum,p)=>sum+p[ch],0)/samples.length);
+    if(!base.every(Number.isFinite))return;
+    const color=(scale,lift=0)=>'rgb('+base.map((v,i)=>Math.round(clamp(v*scale+lift+(i===0?4:0),0,255))).join(',')+')';
+    this.lipPalette={
+      top:color(.32,5),
+      center:color(.18,4),
+      bottom:color(.36,9),
+      highlight:color(.92,27)
+    };
+  }
   setIntensity(value) {
     this.intensity=clamp(Number(value)||1.2,.4,2.4);
     if(this.ready&&!this.frame)this.draw(this.level,this.shape);
@@ -780,7 +811,7 @@ export class PhotoAvatarMotion {
     // in updateHeadPose(), non solo al canvas.
     let face=this.source;
     if(this.expressionEnabled&&this.warp?.ready&&(this.warpRaise>.001||this.warpSmile>.001||this.warpJaw>.001)){
-      face=this.warp.render(this.warpRaise,this.warpSmile,this.warpJaw)||this.source;
+      face=this.warp.render(this.warpRaise,this.warpSmile,this.warpJaw,this.articulationEnabled?clamp((shape-.5)*2.6,-.75,.75):0)||this.source;
     }
     ctx.drawImage(face,0,0);
     // La fotografia degli occhi resta sempre originale; nessuna palpebra viene disegnata.
@@ -790,9 +821,10 @@ export class PhotoAvatarMotion {
     const width=m.width;
     const x=m.cx;
     const middle=(m.top+m.bottom)*.5;
-    const span=width*clamp(.75+(shape-.5)*.32,.66,.84);
+    const roundness=clamp((shape-.5)*2.6,-.75,.75);
+    const span=width*(this.articulationEnabled?clamp(.79-roundness*.115,.67,.86):clamp(.75+(shape-.5)*.32,.66,.84));
     const radiusX=span*.5;
-    const opening=width*(.012+.125*amount)*amount;
+    const opening=width*(.012+.125*amount)*amount*(this.articulationEnabled?clamp(1+roundness*.19,.86,1.16):1);
     const halfHeight=Math.max(.7,Math.min(width*.20,Math.max((m.bottom-m.top)*.5,0)+opening*.85));
     const cxLeft=x-radiusX,cxRight=x+radiusX;
     const lowerShift=clamp(opening*.39,0,width*.050);
@@ -820,9 +852,9 @@ export class PhotoAvatarMotion {
     ctx.bezierCurveTo(x-radiusX*.23,middle+halfHeight,x-radiusX*.64,middle+halfHeight*.66,cxLeft,middle);
     ctx.closePath();
     const cavity=ctx.createLinearGradient(x,middle-halfHeight,x,middle+halfHeight);
-    cavity.addColorStop(0,'#40252b');
-    cavity.addColorStop(.43,'#25151a');
-    cavity.addColorStop(1,'#5a333b');
+    cavity.addColorStop(0,this.articulationEnabled&&this.lipPalette?this.lipPalette.top:'#40252b');
+    cavity.addColorStop(.43,this.articulationEnabled&&this.lipPalette?this.lipPalette.center:'#25151a');
+    cavity.addColorStop(1,this.articulationEnabled&&this.lipPalette?this.lipPalette.bottom:'#5a333b');
     ctx.fillStyle=cavity;
     ctx.globalAlpha=clamp(amount*.81,0,.81);
     ctx.fill();
@@ -831,7 +863,8 @@ export class PhotoAvatarMotion {
     ctx.beginPath();
     ctx.moveTo(x-radiusX*.78,middle+halfHeight*.39);
     ctx.quadraticCurveTo(x,middle+halfHeight*1.3,x+radiusX*.78,middle+halfHeight*.39);
-    ctx.strokeStyle='rgba(199,135,137,.28)';
+    ctx.strokeStyle=this.articulationEnabled&&this.lipPalette?this.lipPalette.highlight:'rgba(199,135,137,.28)';
+    ctx.globalAlpha=this.articulationEnabled&&this.lipPalette?.highlight?.includes('rgb')?.28:1;
     ctx.lineWidth=Math.max(.5,width*.010)*clamp(amount,.1,1);
     ctx.stroke();
     ctx.restore();
