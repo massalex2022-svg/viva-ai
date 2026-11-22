@@ -222,7 +222,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'Anteprima gratuita: labbra sincronizzate alla voce e battiti delle palpebre opzionali. Movimento 2D, non un video fotorealistico.'
+    ? 'Anteprima gratuita: voce Gemini, labbra sincronizzate e leggeri movimenti WebGL di sopracciglia, guance e mandibola. Occhi e palpebre fermi; non è un video AI fotorealistico.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
