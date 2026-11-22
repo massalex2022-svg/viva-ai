@@ -229,3 +229,6 @@
 .handsfree-panel button:disabled{opacity:.55;cursor:not-allowed}
 .handsfree-state{font-size:12px;color:#d4e9ff;line-height:1.35}
 .handsfree-panel small{font-size:10px;line-height:1.5;color:#a9b9d1}
+
+/* VIVA AI 2.21 — conferma visibile della domanda effettivamente riconosciuta */
+.handsfree-last-heard{min-height:22px;padding:7px 9px;border-radius:9px;background:#0c1d30;border:1px solid #29405d;color:#dceeff;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
