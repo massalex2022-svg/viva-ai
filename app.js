@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2120';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2130';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -969,4 +969,7 @@ window.addEventListener('beforeunload',()=>{void state.manager?.disconnect();if(
 window.addEventListener('keydown',(e)=>{if(e.key==='Escape')closeSettings();});
 if ('speechSynthesis' in window) {refreshVoices();speechSynthesis.addEventListener?.('voiceschanged',refreshVoices);}
 updateName();modeChange('basic');voiceSourceChange('standard');
+// Attiva il leggero movimento del volto alla successiva foto caricata.
+// Nessuna modifica alla voce Gemini, nessun movimento artificiale della testa.
+motion.expressionEnabled=$('expression-enabled').checked;
 if (state.worker && state.token) { setConnection(false,'Da verificare'); status('Worker configurato: premi Avvia oppure verifica la connessione.'); }
