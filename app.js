@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2190';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2200';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -7,6 +7,7 @@ const state = {
   worker: localStorage.getItem('viva_worker') || '',
   token: sessionStorage.getItem('viva_token') || '',
   messages: [], active: false, busy: false, recognition: null,
+  handsFree:false, handsFreeTimer:null, handsFreeIdleRestarts:0, voiceCycleActive:false,
   voices: [], lastAgentMessage: '', voiceSource:'standard', voiceFile:null, voicePreviewUrl:null,
   convertedVoiceFile:null, playingUrl:null, speechJob:0, voiceEngine:'gemini',
   lastSpokenText:'', browserUtterance:null, browserStartTimer:null, browserWatchdogTimer:null, browserRetryTimer:null,
@@ -762,6 +763,7 @@ function setBusy(yes) {
   $('start-button').disabled=yes;
   $('send-button').disabled=yes;
   $('mic-button').disabled=yes;
+  handsFreeUI();
 }
 async function start() {
   if (state.active) return status('La conversazione è già avviata.');
@@ -778,6 +780,7 @@ async function start() {
       if (!data.gemini) throw Error('Nel Worker manca GEMINI_API_KEY.');
       if (state.voiceSource==='custom' && !data.voice) throw Error('La voce è caricata, ma Chatterbox non è configurato nel Worker. Scegli Voce standard per provare gratuitamente oppure collega VOICE_SERVICE_URL.');
       state.active=true;
+      handsFreeUI();
       $('avatar-state').textContent='Avatar vocale attivo';
       $('audio-state').textContent='● In ascolto';
       status('Conversazione attiva. Scrivi oppure premi il microfono.');
@@ -837,6 +840,11 @@ async function send(text) {
   if (!state.active) return status('Premi prima “Avvia conversazione”.',true);
   $('message-input').value='';
   const userBubble=addMessage('user',message);
+  if(state.mode==='basic'){
+    if(state.handsFreeTimer!==null)clearTimeout(state.handsFreeTimer);
+    state.handsFreeTimer=null;state.voiceCycleActive=true;
+    if(state.recognition){try{state.recognition.stop()}catch{}}
+  }
   setBusy(true);
   try {
     if (state.mode==='live') {
@@ -872,34 +880,136 @@ async function send(text) {
       void speak(answer).catch(err=>{
         $('audio-state').textContent='● Audio non disponibile';
         status(`La risposta scritta è pronta, ma la voce non è stata generata: ${err.message}`,true);
+        voiceCycleFinished();
       });
     }
   } catch(error) {
+    if(state.mode==='basic')voiceCycleFinished();
     // Non registrare domande fallite nella cronologia, per permettere il retry.
     if (state.mode==='basic') state.messages.pop();
     userBubble?.remove();
     if (!$('message-input').value.trim()) $('message-input').value=message;
     status(error.message || 'Errore durante la risposta. La domanda è rimasta nel campo di scrittura.',true);
-  } finally { setBusy(false); }
+  } finally { setBusy(false);resumeHandsFree(); }
 }
-function microphone() {
-  const Recognition=window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Recognition) return status('Riconoscimento vocale non disponibile. Prova Chrome aggiornato oppure scrivi.',true);
-  if (!state.active) return status('Avvia prima la conversazione.',true);
-  if (state.recognition) { state.recognition.stop(); return; }
-  stopSpokenAudio();
-  const rec=new Recognition(); state.recognition=rec;
-  rec.lang='it-IT'; rec.continuous=false; rec.interimResults=false;
+// VIVA AI 2.20: turni audio facoltativi. Non si ascolta il parlato
+// dell'avatar: durante la risposta il microfono è spento.
+function handsFreeUI(){
+  const button=$('handsfree-button'),note=$('handsfree-state');
+  const on=state.handsFree&&state.active&&state.mode==='basic';
+  button.disabled=(!state.active||state.mode!=='basic'||state.busy)&&!on;
+  button.textContent=on?'■ Ferma ascolto continuo':'🎙 Avvia ascolto continuo';
+  button.setAttribute('aria-pressed',String(on));
+  button.classList.toggle('listening',on);
+  note.textContent=on
+    ?(state.voiceCycleActive?'Avatar in risposta · premi 🎙 per interromperlo.':'Ascolto continuo attivo · parla quando il microfono si accende.')
+    :'Ascolto continuo spento · microfono soltanto su richiesta.';
+}
+function stopHandsFree(message=''){
+  state.handsFree=false;
+  if(state.handsFreeTimer!==null)clearTimeout(state.handsFreeTimer);
+  state.handsFreeTimer=null;state.handsFreeIdleRestarts=0;
+  if(state.recognition){
+    const rec=state.recognition;state.recognition=null;
+    try{rec.stop()}catch{}
+  }
+  $('mic-button').classList.remove('listening');
+  handsFreeUI();
+  if(message)status(message);
+}
+function resumeHandsFree(delay=450){
+  if(!state.handsFree||!state.active||state.mode!=='basic'||state.busy||state.voiceCycleActive||state.recognition)return;
+  if(state.handsFreeTimer!==null)clearTimeout(state.handsFreeTimer);
+  state.handsFreeTimer=setTimeout(()=>{
+    state.handsFreeTimer=null;
+    if(state.handsFree&&state.active&&!state.busy&&!state.voiceCycleActive&&!state.recognition)
+      beginVoiceRecognition(true);
+  },delay);
+}
+function voiceCycleFinished(){
+  state.voiceCycleActive=false;
+  handsFreeUI();
+  resumeHandsFree();
+}
+function beginVoiceRecognition(auto=false){
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition||!state.active||state.mode!=='basic'||state.busy||state.voiceCycleActive||state.recognition)return false;
+  if(state.handsFreeTimer!==null)clearTimeout(state.handsFreeTimer);
+  state.handsFreeTimer=null;
+  const rec=new Recognition();let heard=false;
+  state.recognition=rec;
+  rec.lang='it-IT';rec.continuous=false;rec.interimResults=false;
   $('mic-button').classList.add('listening');
-  status('Microfono attivo: parla ora...');
-  rec.onresult=(event)=>{ const transcript=event.results?.[0]?.[0]?.transcript; if(transcript) send(transcript); };
-  rec.onerror=(event)=>status('Microfono: '+(event.error||'errore')+'. Verifica i permessi.',true);
-  rec.onend=()=>{state.recognition=null;$('mic-button').classList.remove('listening');};
-  try {rec.start();} catch(err) {rec.onend();status(err.message,true);}
+  $('audio-state').textContent='◉ Ti ascolto';
+  status(auto?'Ascolto continuo attivo: parla ora.':'Microfono attivo: parla ora...');
+  rec.onresult=event=>{
+    if(state.recognition!==rec)return;
+    const transcript=String(event.results?.[0]?.[0]?.transcript||'').trim();
+    if(!transcript)return;
+    heard=true;state.handsFreeIdleRestarts=0;
+    try{rec.stop()}catch{}
+    void send(transcript);
+  };
+  rec.onerror=event=>{
+    if(state.recognition!==rec)return;
+    const code=event?.error||'errore';
+    if(['not-allowed','service-not-allowed','audio-capture'].includes(code)){
+      stopHandsFree('Accesso al microfono negato o non disponibile: '+code+'. Controlla i permessi Chrome.');
+    }else if(!['no-speech','aborted'].includes(code)){
+      if(state.handsFree)stopHandsFree('Ascolto continuo interrotto: '+code+'.');
+      else status('Microfono: '+code+'.',true);
+    }
+  };
+  rec.onend=()=>{
+    if(state.recognition!==rec)return;
+    state.recognition=null;
+    $('mic-button').classList.remove('listening');
+    if(!heard&&state.handsFree&&!state.busy&&!state.voiceCycleActive){
+      state.handsFreeIdleRestarts++;
+      if(state.handsFreeIdleRestarts>8)stopHandsFree('Ascolto sospeso dopo un periodo di silenzio. Puoi riattivarlo con un clic.');
+      else resumeHandsFree(900);
+    }
+  };
+  try{rec.start();return true}catch(err){
+    state.recognition=null;
+    $('mic-button').classList.remove('listening');
+    if(state.handsFree)stopHandsFree('Chrome non ha riattivato il microfono. Premi «Avvia ascolto continuo».');
+    else status('Microfono: '+(err?.message||'avvio impossibile'),true);
+    return false;
+  }
+}
+function toggleHandsFree(){
+  if(state.handsFree){stopHandsFree('Ascolto continuo disattivato.');return;}
+  if(!state.active||state.mode!=='basic')return status('Avvia prima la conversazione fotografica.',true);
+  if(!(window.SpeechRecognition||window.webkitSpeechRecognition))return status('Questo browser non supporta il riconoscimento vocale.',true);
+  if(state.busy)return status('Attendi che Gemini prepari la risposta.',true);
+  state.handsFree=true;state.handsFreeIdleRestarts=0;
+  if(state.recognition){try{state.recognition.stop()}catch{}state.recognition=null;}
+  stopSpokenAudio();
+  state.voiceCycleActive=false;
+  handsFreeUI();
+  beginVoiceRecognition(true);
+}
+function microphone(){
+  if(!state.active)return status('Avvia prima la conversazione.',true);
+  if(state.busy)return;
+  if(state.recognition){
+    if(state.handsFree)stopHandsFree('Ascolto continuo disattivato.');
+    else{try{state.recognition.stop()}catch{}}
+    return;
+  }
+  // Interrompe la voce dell'avatar e ascolta la nuova domanda.
+  stopSpokenAudio();
+  state.voiceCycleActive=false;
+  handsFreeUI();
+  beginVoiceRecognition(false);
 }
 async function stop() {
-  state.recognition?.stop();
+  stopHandsFree();
+  if(state.recognition){try{state.recognition.stop()}catch{}state.recognition=null;}
   stopSpokenAudio();
+  state.voiceCycleActive=false;
+  handsFreeUI();
   if (state.manager) {try{await state.manager.disconnect();}catch{} state.manager=null;}
   const video=$('agent-video');video.pause();video.srcObject=null;video.hidden=true;
   $('avatar-photo').hidden=!state.photo;
