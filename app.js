@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2100';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2110';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -295,16 +295,60 @@ async function checkWorker() {
     setConnection(true, 'Cloudflare collegato');
   } catch(error) { settingsStatus(error.message,true); setConnection(false,'Non collegato'); }
 }
-function chooseVoice() {
+const CHROME_VOICE_KEY='viva_chrome_voice_v211';
+function chromeVoiceId(voice){
+  return [voice.voiceURI||'',voice.name||'',voice.lang||''].join('::');
+}
+function chromeVoiceSelection(){
+  return $('chrome-voice-choice')?.value||'auto';
+}
+function chooseVoice(){
   const italian=state.voices.filter(v=>/^it[-_]/i.test(v.lang));
+  const selected=chromeVoiceSelection();
+  if(selected==='default')return null; // Lascia scegliere al motore ChromeOS.
+  if(selected!=='auto'){
+    const exact=italian.find(v=>chromeVoiceId(v)===selected);
+    if(exact)return exact;
+  }
   const local=italian.filter(v=>v.localService);
   const available=local.length?local:italian;
   const preference=$('voice-choice').value;
-  const candidates=preference==='male' ? /(diego|cosimo|luca|marco|male|uomo|gianni|giorgio)/i : /(elsa|isabella|alice|female|donna|paola|lucia)/i;
-  // Prima le voci locali: quelle di rete sono talvolta instabili su Chromebook.
-  // Nessuna voce italiana? Lascia che Chrome usi la sua voce predefinita.
+  const candidates=preference==='male'
+    ?/(diego|cosimo|luca|marco|male|uomo|gianni|giorgio)/i
+    :/(elsa|isabella|alice|female|donna|paola|lucia)/i;
   return available.find(v=>candidates.test(v.name))||available[0]||null;
 }
+function refreshChromeVoiceChoices(){
+  const selector=$('chrome-voice-choice');
+  if(!selector)return;
+  let previous=selector.value||'auto';
+  if(previous==='auto'){
+    try{previous=localStorage.getItem(CHROME_VOICE_KEY)||'auto'}catch{}
+  }
+  const italian=state.voices.filter(v=>/^it[-_]/i.test(v.lang));
+  italian.sort((a,b)=>Number(b.localService)-Number(a.localService)||a.name.localeCompare(b.name,'it'));
+  const options=[
+    {value:'auto',label:'Automatica · preferisci voci locali'},
+    {value:'default',label:'Predefinita Chrome · voce già provata'}
+  ];
+  for(const voice of italian){
+    const key=chromeVoiceId(voice);
+    if(options.some(o=>o.value===key))continue;
+    options.push({value:key,label:(voice.localService?'Locale · ':'Online · ')+voice.name});
+  }
+  selector.replaceChildren();
+  for(const opt of options){
+    const node=document.createElement('option');
+    node.value=opt.value;
+    node.textContent=opt.label;
+    selector.append(node);
+  }
+  selector.value=options.some(o=>o.value===previous)?previous:'auto';
+  $('chrome-voice-count').textContent=italian.length
+    ? italian.length+' voci italiane disponibili, di cui '+italian.filter(v=>v.localService).length+' locali.'
+    :'Chrome non ha ancora caricato voci italiane: prova a riaprire la pagina.';
+}
+
 
 function voiceEngineChange(next) {
   if(state.active || state.busy) return status('Termina la conversazione prima di cambiare il motore vocale.',true);
@@ -506,16 +550,19 @@ function testChromeVoice(){
       '). Premi «1. Sblocca voce Chrome», attendi un secondo e riprova.';
     return;
   }
-  // Nessun nome/ID di voce assegnato: ChromeOS seleziona la propria voce.
-  const utterance=new SpeechSynthesisUtterance('Ciao! Questa è una prova della voce predefinita di Chrome.');
+  const selected=chromeVoiceSelection();
+  const voice=chooseVoice();
+  const label=selected==='default'?'predefinita Chrome':voice?.name||'automatica Chrome';
+  const utterance=new SpeechSynthesisUtterance('Ciao! Questa è una prova della mia voce. Come ti sembra?');
   utterance.lang='it-IT';
-  utterance.rate=1;
+  utterance.rate=.94;
+  if(voice)utterance.voice=voice;
   state.browserDiagnosticUtterance=utterance;
   let started=false,done=false;
-  display.textContent='Prova diretta in corso, voce predefinita di Chrome. '+info;
+  display.textContent='Prova voce «'+label+'» in corso. '+info;
   utterance.onstart=()=>{
     started=true;
-    display.textContent='Chrome dice che la lettura è iniziata. '+info+
+    display.textContent='Chrome segnala che «'+label+'» sta parlando. '+info+
       ' La frase è udibile?';
   };
   utterance.onend=()=>{
@@ -523,7 +570,7 @@ function testChromeVoice(){
     if(state.browserDiagnosticTimer!==null)clearTimeout(state.browserDiagnosticTimer);
     state.browserDiagnosticTimer=null;
     state.browserDiagnosticUtterance=null;
-    display.textContent='Chrome dice che la lettura è terminata. '+info+
+    display.textContent='Prova terminata con «'+label+'». '+info+
       ' Dimmi se hai sentito la frase.';
   };
   utterance.onerror=event=>{
@@ -626,7 +673,12 @@ async function speak(text) {
   }
   speakBrowser(text);
 }
-function refreshVoices() { if ('speechSynthesis' in window) state.voices=speechSynthesis.getVoices(); }
+function refreshVoices(){
+  if('speechSynthesis' in window){
+    state.voices=speechSynthesis.getVoices();
+    refreshChromeVoiceChoices();
+  }
+}
 function setBusy(yes) {
   state.busy=yes;
   $('start-button').disabled=yes;
@@ -833,6 +885,13 @@ $('stop-button').addEventListener('click',stop);
 $('chat-form').addEventListener('submit',(e)=>{e.preventDefault();send($('message-input').value);});
 $('mic-button').addEventListener('click',microphone);
 $('reset-chrome-voice').addEventListener('click',resetChromeVoice);
+$('chrome-voice-choice').addEventListener('change',()=>{
+  try{localStorage.setItem(CHROME_VOICE_KEY,chromeVoiceSelection())}catch{}
+  const voice=chooseVoice();
+  $('chrome-voice-diagnostic').textContent='Voce selezionata: '+
+    (chromeVoiceSelection()==='default'?'predefinita Chrome':voice?.name||'automatica')+
+    '. Premi «Prova voce selezionata» per ascoltarla.';
+});
 $('test-chrome-voice').addEventListener('click',testChromeVoice);
 $('replay-voice').addEventListener('click',()=>{
   if(!state.lastSpokenText)return status('Non c’è ancora una risposta da riascoltare.');
