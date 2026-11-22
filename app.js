@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2210';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2220';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -8,6 +8,7 @@ const state = {
   token: sessionStorage.getItem('viva_token') || '',
   messages: [], active: false, busy: false, recognition: null,
   handsFree:false, handsFreeTimer:null, handsFreeIdleRestarts:0, voiceCycleActive:false,
+  audioAwaitingClick:false, audioStartTimer:null,
   voices: [], lastAgentMessage: '', voiceSource:'standard', voiceFile:null, voicePreviewUrl:null,
   convertedVoiceFile:null, playingUrl:null, speechJob:0, voiceEngine:'gemini',
   lastSpokenText:'', browserUtterance:null, browserStartTimer:null, browserWatchdogTimer:null, browserRetryTimer:null,
@@ -177,8 +178,26 @@ function clearBrowserSpeechTimers(){
   }
   state.browserStartTimer=null;state.browserWatchdogTimer=null;state.browserRetryTimer=null;
 }
+function showGeminiPlaybackRecovery(message){
+  if(state.mode!=='basic'||!state.active)return;
+  state.audioAwaitingClick=true;
+  state.voiceCycleActive=true;
+  $('play-gemini-audio').hidden=false;
+  $('voice-playback-status').textContent=message;
+  $('audio-state').textContent='▶ Voce Gemini pronta da avviare';
+  handsFreeUI();
+  status('Risposta pronta: premi «▶ Ascolta risposta Gemini» per sentire la voce. Il microfono attenderà.');
+}
+function clearGeminiPlaybackRecovery(){
+  state.audioAwaitingClick=false;
+  if(state.audioStartTimer!==null)clearTimeout(state.audioStartTimer);
+  state.audioStartTimer=null;
+  $('play-gemini-audio').hidden=true;
+  $('voice-playback-status').textContent='';
+}
 function stopSpokenAudio() {
   state.speechJob++;
+  clearGeminiPlaybackRecovery();
   clearBrowserSpeechTimers();
   motion.setBrowserSpeaking(false);
   motion.clearSpeechTimeline();
@@ -187,6 +206,7 @@ function stopSpokenAudio() {
   }
   state.browserUtterance=null;
   const audio=$('generated-audio');
+  audio.onended=null;audio.onplay=null;audio.onerror=null;
   audio.pause(); audio.removeAttribute('src'); audio.load(); audio.hidden=true;
   if(state.playingUrl) URL.revokeObjectURL(state.playingUrl);
   state.playingUrl=null;
@@ -628,32 +648,51 @@ function testChromeVoice(){
   },5500);
 }
 async function playAudioBlob(blob,myJob) {
-  if(myJob!==state.speechJob) return;
-  // Analisi locale, senza microfono o chiamate a servizi aggiuntivi.
-  // Se il WAV non è supportato, rimane la sincronizzazione live.
+  if(myJob!==state.speechJob)return;
+  // L'analisi labiale WAV è solo locale: non si modifica la voce Gemini.
   const timeline=await analyzeSpeechWav(blob);
   if(myJob!==state.speechJob)return;
   motion.setSpeechTimeline(timeline);
   state.playingUrl=URL.createObjectURL(blob);
   const audio=$('generated-audio');
   audio.src=state.playingUrl;audio.hidden=false;
+  state.voiceCycleActive=true;
+  handsFreeUI();
   audio.onended=()=>{
     if(myJob!==state.speechJob)return;
+    clearGeminiPlaybackRecovery();
     $('audio-state').textContent='● In ascolto';
     voiceCycleFinished();
   };
   audio.onplay=()=>{
     if(myJob!==state.speechJob)return;
-    $('audio-state').textContent='◉ Sta parlando';
+    clearGeminiPlaybackRecovery();
+    $('audio-state').textContent='◉ Sta parlando (Gemini)';
     state.voiceCycleActive=true;
     if(state.recognition){try{state.recognition.stop()}catch{}}
     handsFreeUI();
   };
-  try { await audio.play(); }
-  catch {
-    stopHandsFree();
-    state.voiceCycleActive=false;
-    status('Audio generato, ma la riproduzione automatica è bloccata. Premi ▶ per ascoltare, poi riattiva l’ascolto continuo.');
+  audio.onerror=()=>{
+    if(myJob!==state.speechJob)return;
+    clearGeminiPlaybackRecovery();
+    voicePlaybackFailed();
+    $('audio-state').textContent='● Errore audio Gemini';
+    status('Il file audio Gemini non può essere riprodotto su Chrome. Prova a riascoltare la risposta oppure riavvia la conversazione.',true);
+  };
+  // Chrome può impedire audio.play() dopo una richiesta asincrona a Gemini,
+  // specialmente quando il microfono è stato riavviato senza un nuovo clic.
+  state.audioStartTimer=setTimeout(()=>{
+    state.audioStartTimer=null;
+    if(myJob!==state.speechJob||!audio.paused)return;
+    showGeminiPlaybackRecovery('La riproduzione non è partita automaticamente. Premi il pulsante qui sopra: non serve ripetere la domanda.');
+  },8500);
+  try{
+    await audio.play();
+  }catch(err){
+    if(myJob!==state.speechJob)return;
+    if(state.audioStartTimer!==null)clearTimeout(state.audioStartTimer);
+    state.audioStartTimer=null;
+    showGeminiPlaybackRecovery('Chrome ha bloccato la riproduzione automatica ('+(err?.name||'autoplay')+'). Premi il pulsante per ascoltare la stessa risposta Gemini.');
   }
 }
 async function retryGeminiVoiceNow(){
@@ -898,7 +937,7 @@ async function send(text) {
       void speak(answer).catch(err=>{
         $('audio-state').textContent='● Audio non disponibile';
         status(`La risposta scritta è pronta, ma la voce non è stata generata: ${err.message}`,true);
-        voiceCycleFinished();
+        voicePlaybackFailed();
       });
     }
   } catch(error) {
@@ -944,7 +983,14 @@ function resumeHandsFree(delay=450){
       beginVoiceRecognition(true);
   },delay);
 }
+function voicePlaybackFailed(){
+  stopHandsFree();
+  clearGeminiPlaybackRecovery();
+  state.voiceCycleActive=false;
+  handsFreeUI();
+}
 function voiceCycleFinished(){
+  if(state.audioAwaitingClick)return;
   state.voiceCycleActive=false;
   handsFreeUI();
   resumeHandsFree(900); // La coda audio deve svuotarsi prima del microfono.
@@ -1235,6 +1281,22 @@ $('chrome-voice-choice').addEventListener('change',()=>{
     '. Premi «Prova voce selezionata» per ascoltarla.';
 });
 $('test-chrome-voice').addEventListener('click',testChromeVoice);
+$('play-gemini-audio').addEventListener('click',()=>{
+  const audio=$('generated-audio');
+  if(state.mode!=='basic'||!state.active||!state.playingUrl||!audio.src)
+    return status('Non c’è una risposta Gemini da ascoltare.',true);
+  // La chiamata a play() deve avvenire direttamente nel clic dell'utente.
+  try{
+    const playback=audio.play();
+    if(playback&&typeof playback.catch==='function'){
+      void playback.catch(err=>{
+        showGeminiPlaybackRecovery('Chrome non ha avviato il file ('+(err?.name||'errore')+'). Puoi anche premere ▶ nel riproduttore audio.');
+      });
+    }
+  }catch(err){
+    showGeminiPlaybackRecovery('Errore nella riproduzione: '+(err?.message||'sconosciuto')+'.');
+  }
+});
 $('replay-voice').addEventListener('click',()=>{
   if(!state.lastSpokenText)return status('Non c’è ancora una risposta da riascoltare.');
   if(state.mode!=='basic')return status('Il riascolto Chrome è disponibile nella modalità fotografica.');
