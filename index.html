@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.17 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=2170">
+  <title>VIVA AI 2.18 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=2180">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.17</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.18</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -112,6 +112,12 @@
             </label>
           </div>
           <label class="consent-line motion-checkbox lip-articulation-option">
+            <input type="checkbox" id="soft-mouth-enabled" checked>
+            <span><b>Bordi delle labbra più morbidi · novità 2.18</b>
+              <small>Sfumatura delicata intorno alla bocca animata, senza sfocare il viso. Disattiva per tornare al disegno preciso della versione 2.17.</small>
+            </span>
+          </label>
+          <label class="consent-line motion-checkbox lip-articulation-option">
             <input type="checkbox" id="fluid-lips-enabled" checked>
             <span><b>Movimenti fluidi delle labbra · novità 2.17</b>
               <small>Raccordi più morbidi fra le sillabe e chiusura più naturale nelle pause della voce Gemini. Disattiva per tornare ai tempi della versione 2.16.</small>
@@ -139,7 +145,7 @@
             <input id="brow-intensity" type="range" min="0" max="150" step="5" value="35">
             <output id="brow-intensity-label" for="brow-intensity">35%</output>
           </label>
-          <p class="motion-settings-hint">Il contorno usa punti MediaPipe della fotografia. La nuova fluidità rende più naturali le transizioni nell'audio WAV Gemini senza riconoscere fonemi esatti. Ogni opzione è reversibile; occhi e inquadratura restano fermi.</p>
+          <p class="motion-settings-hint">Il contorno usa punti MediaPipe e una lieve sfumatura limitata alle labbra. La voce Gemini resta invariata: la bocca segue gli indizi acustici, non i fonemi esatti. Ogni opzione è reversibile; occhi e inquadratura rimangono fermi.</p>
           <div class="motion-buttons">
             <button class="ghost" type="button" id="expression-test">◉ Prova sorrisi ed espressioni</button>
             <button class="ghost" type="button" id="motion-test">▶ Prova ritmo delle labbra</button>
@@ -177,6 +183,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=2170"></script>
+  <script type="module" src="app.js?v=2180"></script>
 </body>
 </html>
