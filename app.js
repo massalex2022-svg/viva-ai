@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2140';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2150';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -222,7 +222,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'Anteprima gratuita: voce Gemini, labbra sincronizzate, guance e sopracciglia che seguono il ritmo della voce. Sorriso discreto quando il testo è allegro. Occhi fermi; non è un video AI fotorealistico.'
+    ? 'Anteprima gratuita: voce Gemini, movimento labbra adattivo ai suoni, guance e sopracciglia espressive. Il nuovo movimento della bocca può essere disattivato; occhi fermi e nessuna oscillazione della foto.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -911,6 +911,20 @@ $('retry-gemini-tts').addEventListener('click',()=>{void retryGeminiVoiceNow()})
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('eyes-pick').addEventListener('click',()=>motion.pickEyes());
+const LIP_ARTICULATION_KEY='viva_lip_articulation_215';
+try{
+  $('lip-articulation-enabled').checked=localStorage.getItem(LIP_ARTICULATION_KEY)!=='false';
+}catch{
+  $('lip-articulation-enabled').checked=true;
+}
+motion.setArticulationEnabled($('lip-articulation-enabled').checked);
+$('lip-articulation-enabled').addEventListener('change',e=>{
+  motion.setArticulationEnabled(e.target.checked);
+  try{localStorage.setItem(LIP_ARTICULATION_KEY,String(e.target.checked))}catch{}
+  $('photo-motion-status').textContent=e.target.checked
+    ?'Articolazione naturale attiva: forma delle labbra e tonalità della bocca adattate alla foto.'
+    :'Articolazione naturale disattivata: movimento delle labbra classico ripristinato.';
+});
 $('expression-enabled').addEventListener('change',e=>motion.setExpressionEnabled(e.target.checked));
 $('expression-test').addEventListener('click',()=>motion.testExpression());
 $('head-enabled').addEventListener('change',e=>motion.setHeadEnabled(e.target.checked));
