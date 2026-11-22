@@ -14,8 +14,11 @@ const testBrows = $('test-brows');
 const testSmile = $('test-smile');
 
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
-const VISION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/vision_bundle.mjs';
-const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm';
+// Versione stabile e coerente fra bundle ESM e file WASM; seconda CDN automatica.
+const MEDIAPIPE_SOURCES = [
+ {name:'jsDelivr',module:'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs',wasm:'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm'},
+ {name:'UNPKG',module:'https://unpkg.com/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs',wasm:'https://unpkg.com/@mediapipe/tasks-vision@0.10.21/wasm'}
+];
 const vertexShader = [
  '#version 300 es',
  'precision highp float;',
@@ -67,12 +70,27 @@ let modelPromise=null;
 function getModel(){
  if(!modelPromise){
   modelPromise=(async()=>{
-   const vision=await import(VISION_URL);
-   const files=await vision.FilesetResolver.forVisionTasks(WASM_URL);
-   return vision.FaceLandmarker.createFromOptions(files,{
-    baseOptions:{modelAssetPath:MODEL_URL,delegate:'CPU'},
-    runningMode:'IMAGE',numFaces:1,outputFaceBlendshapes:false
-   });
+   const failures=[];
+   for(const source of MEDIAPIPE_SOURCES){
+    try{
+     showStatus('Caricamento riconoscimento facciale da '+source.name+'…');
+     const vision=await import(source.module);
+     if(!vision.FilesetResolver?.forVisionTasks||!vision.FaceLandmarker?.createFromOptions){
+       throw Error('Il modulo non esporta le funzioni MediaPipe attese');
+     }
+     const files=await vision.FilesetResolver.forVisionTasks(source.wasm);
+     const model=await vision.FaceLandmarker.createFromOptions(files,{
+      baseOptions:{modelAssetPath:MODEL_URL,delegate:'CPU'},
+      runningMode:'IMAGE',numFaces:1,outputFaceBlendshapes:false
+     });
+     showStatus('Riconoscimento facciale caricato tramite '+source.name+'. Analizzo la foto…');
+     return model;
+    }catch(err){
+     failures.push(source.name+': '+(err?.message||String(err)));
+     console.warn('VIVA AI 2.0: caricamento MediaPipe fallito da '+source.name,err);
+    }
+   }
+   throw Error('MediaPipe non è raggiungibile da nessuno dei due server. '+failures.join(' | ')+' Verifica la connessione o eventuali blocchi del browser.');
   })().catch(e=>{modelPromise=null;throw e});
  }
  return modelPromise;
