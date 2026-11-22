@@ -1,4 +1,4 @@
-/* VIVA AI 2.13 — deformazione fotogramma WebGL2.
+/* VIVA AI 2.14 — deformazione fotogramma WebGL2.
  * Basato sul prototipo VIVA AI 2.0 LAB già provato.
  * Usa solo i punti del volto e la foto già caricati in locale.
  * Importando questa classe NON si modifica la voce né si scaricano modelli aggiuntivi.
@@ -54,6 +54,12 @@ const frag = [
  '  softLocal(pos,u_mouth0,vec2(mouthRadiusX,mouthRadiusY))+',
  '  softLocal(pos,u_mouth1,vec2(mouthRadiusX,mouthRadiusY));',
  ' sampleUV.y+=u_smile*min(1.0,smileInfluence);',
+ ' // Guance: piccola tensione della texture vicina agli angoli della bocca.',
+ ' vec2 cheek0=vec2(u_mouth0.x-mouthRadiusX*0.36,u_mouth0.y-mouthRadiusY*0.88);',
+ ' vec2 cheek1=vec2(u_mouth1.x+mouthRadiusX*0.36,u_mouth1.y-mouthRadiusY*0.88);',
+ ' float cheeks=softLocal(pos,cheek0,vec2(mouthRadiusX*0.96,mouthRadiusY*0.83))',
+ '   +softLocal(pos,cheek1,vec2(mouthRadiusX*0.96,mouthRadiusY*0.83));',
+ ' sampleUV.y+=u_smile*0.36*min(1.0,cheeks)*eyeGuard;',
  ' // Jaw deformation limited to the lower face; eyes and forehead are untouched.',
  ' vec2 mouthMid=(u_mouth0+u_mouth1)*0.5;',
  ' float mouthWidth=max(0.025,length(u_mouth1-u_mouth0));',
