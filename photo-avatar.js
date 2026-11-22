@@ -1,4 +1,4 @@
-/* VIVA AI 2.13 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
+/* VIVA AI 2.14 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -46,6 +46,8 @@ export class PhotoAvatarMotion {
     // WebGL è opzionale: il modulo viene caricato solo attivando le espressioni 2.0.
     this.warp=null;this.warpConstructor=null;this.warpModulePromise=null;this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
     this.expressionDemoStart=0;this.expressionDemoUntil=0;this.voiceExpressionStart=0;
+    this.responseMood='neutral';this.expressionAccent=0;this.expressionBrow=0;
+    this.expressionSmile=0;this.previousVoiceLevel=0;this.lastAccentAt=-Infinity;
     this.blinkStart=-1;this.blinkTimer=null;this.blinkAmount=0;this.blinkDuration=245;
     this.browserSpeaking=false; this.browserStart=0;
     this.demoUntil=0;this.demoStart=0;this.manualPending=false;
@@ -99,7 +101,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
+    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;this.responseMood='neutral';if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
     this.manualPending=false;this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');this.onAudioStop();
     this.updateDisplay();
@@ -283,7 +285,9 @@ export class PhotoAvatarMotion {
     if(this.expressionTimer!==null)clearTimeout(this.expressionTimer);
     this.expressionTimer=null;
     this.expressionDemoUntil=0;
-    this.warpRaise=0;this.warpSmile=0;
+    this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
+    this.expressionAccent=0;this.expressionBrow=0;this.expressionSmile=0;
+    this.previousVoiceLevel=0;this.lastAccentAt=-Infinity;
   }
   scheduleExpression() { /* Ora l'animazione è temporizzata nel ciclo voce. */ }
   setupWarp() {
@@ -313,7 +317,7 @@ export class PhotoAvatarMotion {
     if(this.warp?.ready)return true;
     try{
       if(!this.warpConstructor){
-        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=2130');
+        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=2140');
         const module=await this.warpModulePromise;
         if(!this.expressionEnabled)return false;
         this.warpConstructor=module.FaceWarp;
@@ -346,7 +350,7 @@ export class PhotoAvatarMotion {
   }
   async testExpression() {
     if(!this.expressionEnabled){
-      this.status('Attiva prima «Espressioni 2.0 · WebGL», poi premi di nuovo il pulsante.');
+      this.status('Attiva prima «Volto naturale · micro-espressioni WebGL», poi riprova.');
       return;
     }
     if(!await this.prepareWarp())return;
@@ -355,27 +359,61 @@ export class PhotoAvatarMotion {
     this.status('TEST VOLTO: prima sopracciglia, poi lieve sorriso, infine una piccola apertura della mandibola. Gli occhi restano immobili.');
     this.run();
   }
-  updateWarpMotion(time,speaking,demonstrating) {
-    if(!this.expressionEnabled||!this.warp?.ready){this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;return;}
-    const wave=(t,from,length)=>t>=from&&t<=from+length?Math.pow(Math.sin(Math.PI*(t-from)/length),1.15):0;
+  // Stima locale, prudente, del tono della risposta: non è analisi emotiva AI
+  // e non genera alcuna nuova chiamata a Gemini.
+  setResponseMood(text){
+    const words=String(text||'').slice(0,1600).toLocaleLowerCase('it');
+    const serious=/\b(mi dispiace|purtroppo|condoglianz|lutto|morte|morto|malattia|incidente|pericolo|dolore|grave|emergenza|triste|sofferenza|problema serio)\b/i.test(words);
+    const friendly=/\b(ahah+|eh eh|scherz\w*|diverten\w*|felic\w*|content\w*|fantastic\w*|meraviglios\w*|compliment\w*|ottimo|evviva|sorris\w*|bravissim\w*)\b/i.test(words)||/[😄😁😂😊😃]/u.test(words);
+    this.responseMood=serious?'serious':friendly?'friendly':/[?？]/.test(words)?'curious':'neutral';
+    this.expressionAccent=0;this.expressionBrow=0;this.expressionSmile=0;
+    this.previousVoiceLevel=0;this.lastAccentAt=-Infinity;
+  }
+  updateWarpMotion(time,speaking,demonstrating,dt=16.7){
+    if(!this.expressionEnabled||!this.warp?.ready){
+      this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;return;
+    }
+    const wave=(t,from,length)=>t>=from&&t<=from+length
+      ?Math.pow(Math.sin(Math.PI*(t-from)/length),1.15):0;
     const browStrength=clamp(this.browIntensity,0,1.5);
     if(demonstrating){
       const t=(time-this.expressionDemoStart)/1000;
       this.warpRaise=clamp(wave(t,.15,1.10)*.90*browStrength,0,1);
       this.warpSmile=clamp(wave(t,1.50,1.15)*.24,0,.32);
       this.warpJaw=clamp(wave(t,2.82,.98)*.66,0,.66);
-    }else if(speaking){
-      const t=Math.max(0,(time-this.voiceExpressionStart)/1000);
-      const phase=t%13.7;
-      // Accenti brevi e distanziati: sopracciglia meno meccaniche.
-      // Il cursore sopracciglia non modifica l'ampiezza del sorriso.
-      const emphasis=clamp((this.level-.05)*1.5,.22,1);
-      this.warpRaise=clamp((wave(phase,.8,1.20)*.48+wave(phase,5.35,.95)*.30+wave(phase,10.25,1.08)*.38)*browStrength*emphasis,0,.60);
-      this.warpSmile=clamp(wave(phase,7.1,1.65)*.17,0,.24);
-      if(this.level>.32)this.warpSmile*=.28; // Non interferire con il parlato.
-    }else{
-      this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
+      return;
     }
+    if(!speaking){
+      this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
+      this.previousVoiceLevel=0;this.expressionAccent=0;
+      this.expressionBrow=0;this.expressionSmile=0;
+      return;
+    }
+    const level=clamp(this.level,0,1);
+    const rise=level-this.previousVoiceLevel;
+    const isNewPhrase=this.previousVoiceLevel<.12&&level>.24;
+    const hasEmphasis=rise>.14&&level>.40;
+    // L'espressione segue gli attacchi e gli accenti del parlato.
+    // Nessuna oscillazione periodica della fronte a tempo prefissato.
+    if((isNewPhrase&&time-this.lastAccentAt>1100)||
+       (hasEmphasis&&time-this.lastAccentAt>1650)){
+      this.lastAccentAt=time;
+      this.expressionAccent=clamp(.20+level*.30,0,.47);
+    }
+    this.expressionAccent*=Math.exp(-dt/480);
+    const curious=this.responseMood==='curious';
+    const friendly=this.responseMood==='friendly';
+    const serious=this.responseMood==='serious';
+    const eyebrowGoal=(this.expressionAccent*.80+(curious?.055:0))*browStrength;
+    this.expressionBrow+=(eyebrowGoal-this.expressionBrow)*(1-Math.exp(-dt/155));
+    this.warpRaise=clamp(this.expressionBrow,0,.48);
+    // Il sorriso non deve comparire durante risposte serie e si attenua
+    // quando la bocca è molto aperta, così non diventa un ghigno fisso.
+    const warmth=serious?0:friendly?.16:curious?.04:.027;
+    const smileGoal=warmth*(.90-.66*level)+(friendly?this.expressionAccent*.065:0);
+    this.expressionSmile+=(smileGoal-this.expressionSmile)*(1-Math.exp(-dt/235));
+    this.warpSmile=clamp(this.expressionSmile,0,.20);
+    this.previousVoiceLevel=level;
   }
   resetHeadPose(){
     for(const node of [this.canvas,this.lidLayer,this.browLayer]){
@@ -654,6 +692,8 @@ export class PhotoAvatarMotion {
     if(this.frame)cancelAnimationFrame(this.frame);
     this.frame=0;this.level=0;this.shape=.48;this.lastFrameTime=0;
     this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
+    this.expressionAccent=0;this.expressionBrow=0;this.expressionSmile=0;
+    this.previousVoiceLevel=0;this.lastAccentAt=-Infinity;
     this.resetHeadPose();
     if(this.ready)this.draw(0,this.shape);
   }
@@ -667,7 +707,6 @@ export class PhotoAvatarMotion {
     const dt=this.lastFrameTime?clamp(time-this.lastFrameTime,8,55):16.7;
     this.lastFrameTime=time;
     this.updateHeadPose(time,playing||this.browserSpeaking);
-    this.updateWarpMotion(time,playing||this.browserSpeaking,demoExpression);
     let target=0;
     let shapeTarget=.48;
     if(demo) {
@@ -721,6 +760,7 @@ export class PhotoAvatarMotion {
     this.level+=(target-this.level)*smoothing;
     this.shape+=(shapeTarget-this.shape)*(1-Math.exp(-dt/90));
     if(this.level<.035)this.level=0;
+    this.updateWarpMotion(time,playing||this.browserSpeaking,demoExpression,dt);
     // La mandibola segue la stessa timeline del parlato.
     // Naso, occhi, palpebre e inquadratura rimangono invariati.
     if(this.expressionEnabled&&this.warp?.ready&&!demoExpression){
