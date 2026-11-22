@@ -221,3 +221,11 @@
 .gemini-tts-recheck button{justify-self:start;max-width:100%;white-space:normal}
 .gemini-tts-recheck button:disabled{opacity:.55;cursor:wait}
 #gemini-tts-test-result{line-height:1.5;overflow-wrap:anywhere}
+
+/* VIVA AI 2.20 — indicatore esplicito e reversibile dell'ascolto continuo */
+.handsfree-panel{display:grid;gap:7px;background:#13223a;border:1px solid #314d6a;border-radius:13px;padding:10px 12px;margin:0 0 12px}
+.handsfree-panel button{justify-self:start;max-width:100%;min-height:42px;font-size:12px;font-weight:700;white-space:normal;text-align:left}
+.handsfree-panel button.listening{background:#174b43;border-color:#5ca99e;color:#e5fff7}
+.handsfree-panel button:disabled{opacity:.55;cursor:not-allowed}
+.handsfree-state{font-size:12px;color:#d4e9ff;line-height:1.35}
+.handsfree-panel small{font-size:10px;line-height:1.5;color:#a9b9d1}
