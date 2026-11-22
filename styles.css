@@ -189,3 +189,9 @@
 /* VIVA AI 2.4 — aiuto regolazioni persistenti */
 .motion-settings-hint{font-size:11px;line-height:1.5;color:#a1b7c9;margin:10px 0 8px}
 #motion-reset{border-style:dashed;opacity:.92}
+
+/* VIVA AI 2.6 — stile di conversazione, senza alterare il layout del volto */
+.conversation-style-field{display:grid;gap:7px;margin:15px 0 11px}
+.conversation-style-field>span{font-size:13px;font-weight:750;color:#dbe6fa}
+.conversation-style-field select{width:100%;min-height:42px;border-radius:11px;border:1px solid #3b5373;background:#131f34;color:#e8f7ff;padding:10px 12px}
+.conversation-style-field small{font-size:11px;line-height:1.5;color:#a6b5ce}
