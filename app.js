@@ -458,6 +458,7 @@ function speakBrowser(text,{direct=false}={}){
       state.browserUtterance=null;
       $('audio-state').textContent='● In ascolto';
       motion.setBrowserSpeaking(false);
+      voiceCycleFinished();
     };
     utterance.onerror=(event)=>{
       if(job!==state.speechJob||finished)return;
@@ -473,6 +474,7 @@ function speakBrowser(text,{direct=false}={}){
       }else{
         $('audio-state').textContent='● Voce Chrome bloccata';
         status('La voce Chrome non è partita. Premi «Riascolta risposta» per riattivarla.',true);
+        voiceCycleFinished();
       }
     };
     function retry(){
@@ -497,6 +499,7 @@ function speakBrowser(text,{direct=false}={}){
         state.browserUtterance=null;
         $('audio-state').textContent='● Voce Chrome bloccata';
         status('Chrome non riesce a leggere la risposta. Premi «Riascolta risposta».',true);
+        voiceCycleFinished();
       }
       return;
     }
@@ -509,6 +512,7 @@ function speakBrowser(text,{direct=false}={}){
         state.browserUtterance=null;
         $('audio-state').textContent='● Voce Chrome bloccata';
         status('Chrome ha preparato la risposta ma non ha avviato la voce. Premi «Riascolta risposta» per riprovare.',true);
+        voiceCycleFinished();
       }
     },2800);
   }
@@ -633,10 +637,23 @@ async function playAudioBlob(blob,myJob) {
   state.playingUrl=URL.createObjectURL(blob);
   const audio=$('generated-audio');
   audio.src=state.playingUrl;audio.hidden=false;
-  audio.onended=()=>$('audio-state').textContent='● In ascolto';
-  audio.onplay=()=>$('audio-state').textContent='◉ Sta parlando';
+  audio.onended=()=>{
+    if(myJob!==state.speechJob)return;
+    $('audio-state').textContent='● In ascolto';
+    voiceCycleFinished();
+  };
+  audio.onplay=()=>{
+    $('audio-state').textContent='◉ Sta parlando';
+    state.voiceCycleActive=true;
+    if(state.recognition){try{state.recognition.stop()}catch{}}
+    handsFreeUI();
+  };
   try { await audio.play(); }
-  catch {status('Audio generato. Premi ▶ nel riproduttore sotto la chat per ascoltarlo.');}
+  catch {
+    stopHandsFree();
+    state.voiceCycleActive=false;
+    status('Audio generato, ma la riproduzione automatica è bloccata. Premi ▶ per ascoltare, poi riattiva l’ascolto continuo.');
+  }
 }
 async function retryGeminiVoiceNow(){
   const result=$('gemini-tts-test-result');
@@ -1140,6 +1157,10 @@ $('start-button').addEventListener('click',start);
 $('stop-button').addEventListener('click',stop);
 $('chat-form').addEventListener('submit',(e)=>{e.preventDefault();send($('message-input').value);});
 $('mic-button').addEventListener('click',microphone);
+$('handsfree-button').addEventListener('click',toggleHandsFree);
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden&&state.handsFree)stopHandsFree('Ascolto continuo interrotto: la scheda non è più visibile.');
+});
 $('reset-chrome-voice').addEventListener('click',resetChromeVoice);
 $('chrome-voice-choice').addEventListener('change',()=>{
   try{localStorage.setItem(CHROME_VOICE_KEY,chromeVoiceSelection())}catch{}
@@ -1167,7 +1188,7 @@ document.querySelectorAll('[data-prompt]').forEach(b=>b.addEventListener('click'
 window.addEventListener('beforeunload',()=>{void state.manager?.disconnect();if(state.photoUrl)URL.revokeObjectURL(state.photoUrl);if(state.voicePreviewUrl)URL.revokeObjectURL(state.voicePreviewUrl);stopSpokenAudio();});
 window.addEventListener('keydown',(e)=>{if(e.key==='Escape')closeSettings();});
 if ('speechSynthesis' in window) {refreshVoices();speechSynthesis.addEventListener?.('voiceschanged',refreshVoices);}
-updateName();modeChange('basic');voiceSourceChange('standard');
+updateName();modeChange('basic');voiceSourceChange('standard');handsFreeUI();
 // Attiva il leggero movimento del volto alla successiva foto caricata.
 // Nessuna modifica alla voce Gemini, nessun movimento artificiale della testa.
 motion.expressionEnabled=$('expression-enabled').checked;
