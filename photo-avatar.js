@@ -1,4 +1,4 @@
-/* VIVA AI 1.4.6 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 1.4.7 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -265,6 +265,30 @@ export class PhotoAvatarMotion {
       return n?'rgb('+Math.round(r/n)+','+Math.round(g/n)+','+Math.round(b/n)+')':'rgb(179,145,129)';
     }catch{return 'rgb(179,145,129)';}
   }
+  skinTextureAt(eye,upper) {
+    // Campione reale della pelle immediatamente sopra o sotto l'occhio.
+    // Viene estratto solo nel browser, senza inviare immagini a servizi esterni.
+    const source=this.source;
+    if(!source?.width||!source?.height)return null;
+    const span=eye.width*1.08;
+    const band=Math.max(2,eye.height*.95);
+    const startY=upper ? eye.cy-eye.height*2.18 : eye.cy+eye.height*1.20;
+    const left=clamp(eye.cx-span/2,0,Math.max(0,source.width-span));
+    const top=clamp(startY,0,Math.max(0,source.height-band));
+    const width=Math.min(span,source.width-left),height=Math.min(band,source.height-top);
+    if(width<3||height<2)return null;
+    try{
+      const texture=document.createElement('canvas');
+      texture.width=Math.max(12,Math.round(eye.width*1.15));
+      texture.height=Math.max(8,Math.round(eye.height*1.25));
+      const ctx=texture.getContext('2d');
+      if(!ctx)return null;
+      ctx.imageSmoothingEnabled=true;
+      ctx.imageSmoothingQuality='high';
+      ctx.drawImage(source,left,top,width,height,0,0,texture.width,texture.height);
+      return texture.toDataURL('image/png');
+    }catch(err){console.warn('VIVA AI: texture palpebra non disponibile',err);return null;}
+  }
   setupLids() {
     this.clearLids();
     if(!this.lidLayer||this.eyes.length!==2||!this.source||!this.canvas.width)return;
@@ -278,13 +302,17 @@ export class PhotoAvatarMotion {
       patch.className='eye-lid-patch';
       patch.style.left=(offsetX+eye.cx*scale)+'px';
       patch.style.top=(offsetY+eye.cy*scale)+'px';
-      patch.style.width=(eye.width*scale*1.16)+'px';
-      patch.style.height=(eye.height*scale*3.0)+'px';
+      patch.style.width=(eye.width*scale*1.09)+'px';
+      patch.style.height=(eye.height*scale*2.65)+'px';
       patch.style.setProperty('--eye-tilt',eye.angle+'rad');
       const top=document.createElement('div'),bottom=document.createElement('div'),seam=document.createElement('div');
       top.className='eye-lid-top';bottom.className='eye-lid-bottom';seam.className='eye-lid-seam';
-      top.style.backgroundColor=this.skinColorAt(eye.cx,eye.cy-eye.height*2.1);
-      bottom.style.backgroundColor=this.skinColorAt(eye.cx,eye.cy+eye.height*2.2);
+      top.style.backgroundColor=this.skinColorAt(eye.cx,eye.cy-eye.height*1.7);
+      bottom.style.backgroundColor=this.skinColorAt(eye.cx,eye.cy+eye.height*1.7);
+      const upperSkin=this.skinTextureAt(eye,true);
+      const lowerSkin=this.skinTextureAt(eye,false);
+      if(upperSkin)top.style.backgroundImage='url("'+upperSkin+'")';
+      if(lowerSkin)bottom.style.backgroundImage='url("'+lowerSkin+'")';
       patch.appendChild(top);patch.appendChild(bottom);patch.appendChild(seam);
       this.lidLayer.appendChild(patch);this.lidPatches.push(patch);
     }
@@ -387,14 +415,14 @@ export class PhotoAvatarMotion {
     if(this.lidPatches.length!==2){
       this.status('Non riesco a mostrare le palpebre sulla foto. Inviami uno screenshot.');return;
     }
-    this.status('TEST PALPEBRE: gli occhi si chiudono due volte lentamente. I cerchi verdi sono disattivati.');
+    this.status('PROVA PALPEBRE: primo battito controllato, secondo più veloce e naturale. Osserva la pelle intorno agli occhi.');
     if(this.blinkTestTimer!==null)clearTimeout(this.blinkTestTimer);
     if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
     this.blinkTestTimer=null;this.blinkTimer=null;
-    this.startBlink(1050);
+    this.startBlink(600);
     this.blinkTestTimer=setTimeout(()=>{
-      this.blinkTestTimer=null;this.startBlink(1050);
-    },1480);
+      this.blinkTestTimer=null;this.startBlink(250);
+    },1000);
   }
   setBlinkEnabled(value) {
     this.blinkEnabled=Boolean(value);
