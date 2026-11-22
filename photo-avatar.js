@@ -361,10 +361,12 @@ export class PhotoAvatarMotion {
   }
   // Stima locale, prudente, del tono della risposta: non è analisi emotiva AI
   // e non genera alcuna nuova chiamata a Gemini.
-  setResponseMood(text){
+  setResponseMood(text,context=''){
     const words=String(text||'').slice(0,1600).toLocaleLowerCase('it');
-    const serious=/\b(mi dispiace|purtroppo|condoglianz|lutto|morte|morto|malattia|incidente|pericolo|dolore|grave|emergenza|triste|sofferenza|problema serio)\b/i.test(words);
-    const friendly=/\b(ahah+|eh eh|scherz\w*|diverten\w*|felic\w*|content\w*|fantastic\w*|meraviglios\w*|compliment\w*|ottimo|evviva|sorris\w*|bravissim\w*)\b/i.test(words)||/[😄😁😂😊😃]/u.test(words);
+    const question=String(context||'').slice(0,350).toLocaleLowerCase('it');
+    const jokeRequested=/\b(raccontami (una |un )?barzellett\w*|dimmi una battuta|fammi ridere|mi racconti una barzellett\w*|raccontami qualcosa di divertente)\b/i.test(question);
+    const serious=/\b(mi dispiace|purtroppo|condoglianz\w*|lutto|morte|morto|malattia|incidente|pericolo|dolore|grav\w*|emergenza|trist\w*|sofferenz\w*|problema serio)\b/i.test(words);
+    const friendly=jokeRequested||/\b(ahah+|eh eh|scherz\w*|diverten\w*|felic\w*|content\w*|fantastic\w*|meraviglios\w*|compliment\w*|ottimo|evviva|sorris\w*|bravissim\w*)\b/i.test(words)||/[😄😁😂😊😃]/u.test(words);
     this.responseMood=serious?'serious':friendly?'friendly':/[?？]/.test(words)?'curious':'neutral';
     this.expressionAccent=0;this.expressionBrow=0;this.expressionSmile=0;
     this.previousVoiceLevel=0;this.lastAccentAt=-Infinity;
