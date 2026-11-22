@@ -210,3 +210,8 @@
 /* VIVA AI 2.10 — verifica del motore vocale in due clic distinti */
 .chrome-voice-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .chrome-voice-actions button{white-space:normal;text-align:left;min-height:40px}
+
+/* VIVA AI 2.11 — elenco accessibile delle voci italiane disponibili */
+.chrome-voice-check .field{display:grid;gap:7px;font-size:12px;color:#dbe6fa}
+.chrome-voice-check .field select{width:100%;min-height:42px;border:1px solid #3b5373;border-radius:11px;background:#131f34;color:#e8f7ff;padding:9px 11px}
+#chrome-voice-count{margin:0;font-size:11px;color:#a8bace}
