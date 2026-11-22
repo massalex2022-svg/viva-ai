@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2180';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2190';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -58,20 +58,38 @@ function conversationStyle(){
   const value=$('conversation-style').value;
   return Object.hasOwn(CONVERSATION_STYLES,value)?value:'natural';
 }
+const NATURAL_DIALOGUE_KEY='viva_natural_dialogue_219';
+function naturalDialogueEnabled(){
+  return $('natural-dialogue-enabled').checked;
+}
 function conversationalPersonality(repeated=false){
   const preferences=$('personality').value.trim();
+  // Le istruzioni sono incluse nello stesso /api/chat: nessuna chiamata extra.
+  // Il limite di 900 caratteri lascia spazio anche alla personalità dell'utente.
   const guidance=[
-    'Rispondi in italiano alla domanda concreta dell’ultimo messaggio.',
-    'Mantieni continuità con il dialogo e rispetta la personalità scelta.',
-    'Evita frasi preconfezionate, saluti continui, ripetizioni e domande generiche a ogni turno.',
-    'Varia la formulazione e fai domande soltanto se utili.',
-    'Non inventare fatti, esperienze o ricordi.',
+    'Rispondi in italiano alla richiesta concreta, senza preamboli.',
+    'Segui gli ultimi scambi e la personalità scelta.',
+    'Non inventare fatti, ricordi o esperienze personali.',
     CONVERSATION_STYLES[conversationStyle()]
   ];
-  if(repeated)guidance.push('La tua prima risposta a questa domanda ripeteva una risposta già data: rispondi con contenuto nuovo e pertinente, senza riciclare la stessa formula.');
+  if(naturalDialogueEnabled()){
+    guidance.push(
+      'Parla come in un dialogo vero: frasi scorrevoli, niente elenchi o titoli se non richiesti.',
+      'Per «perché?», «e poi?», «continua», «e questo?» e risposte brevi come «ok», usa il contesto degli ultimi messaggi; non ricominciare da zero.',
+      'Per domande semplici bastano poche frasi; approfondisci quando richiesto.',
+      'Evita saluti ripetuti, complimenti automatici e domande finali di rito. Fai domande solo se servono.',
+      'Adatta il tono alla situazione, senza umorismo forzato.'
+    );
+  }else{
+    guidance.push(
+      'Evita frasi preconfezionate, saluti continui, ripetizioni e domande generiche a ogni turno.',
+      'Varia la formulazione e fai domande soltanto se utili.'
+    );
+  }
+  if(repeated)guidance.push('La risposta precedente era troppo simile: dai contenuto nuovo pertinente, senza ripetere la stessa formula.');
   const guide=guidance.join(' ');
-  const maxUser=Math.max(100,900-guide.length-2);
-  return (preferences.slice(0,maxUser)+'\n\n'+guide).slice(0,900);
+  const limit=900;
+  return [preferences.slice(0,Math.max(0,limit-guide.length-2)),guide].filter(Boolean).join('\n\n').slice(0,limit);
 }
 function normalizedReply(text){
   return String(text||'').toLocaleLowerCase('it-IT').normalize('NFD')
@@ -911,6 +929,17 @@ $('retry-gemini-tts').addEventListener('click',()=>{void retryGeminiVoiceNow()})
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('eyes-pick').addEventListener('click',()=>motion.pickEyes());
+try{
+  $('natural-dialogue-enabled').checked=localStorage.getItem(NATURAL_DIALOGUE_KEY)!=='false';
+}catch{
+  $('natural-dialogue-enabled').checked=true;
+}
+$('natural-dialogue-enabled').addEventListener('change',event=>{
+  try{localStorage.setItem(NATURAL_DIALOGUE_KEY,String(event.target.checked))}catch{}
+  status(event.target.checked
+    ?'Dialogo spontaneo attivo: Gemini seguirà il contesto e risponderà in modo più colloquiale.'
+    :'Dialogo spontaneo disattivato: ripristinate le istruzioni precedenti.');
+});
 const SOFT_MOUTH_KEY='viva_soft_mouth_218';
 try{
   $('soft-mouth-enabled').checked=localStorage.getItem(SOFT_MOUTH_KEY)!=='false';
