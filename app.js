@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2200';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2210';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -947,51 +947,96 @@ function resumeHandsFree(delay=450){
 function voiceCycleFinished(){
   state.voiceCycleActive=false;
   handsFreeUI();
-  resumeHandsFree();
+  resumeHandsFree(900); // La coda audio deve svuotarsi prima del microfono.
 }
 function beginVoiceRecognition(auto=false){
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(!Recognition||!state.active||state.mode!=='basic'||state.busy||state.voiceCycleActive||state.recognition)return false;
   if(state.handsFreeTimer!==null)clearTimeout(state.handsFreeTimer);
   state.handsFreeTimer=null;
-  const rec=new Recognition();let heard=false;
+  const rec=new Recognition();
+  let transcript='',closed=false,finalizeTimer=null;
   state.recognition=rec;
   rec.lang='it-IT';rec.continuous=false;rec.interimResults=false;
   $('mic-button').classList.add('listening');
   $('audio-state').textContent='◉ Ti ascolto';
-  status(auto?'Ascolto continuo attivo: parla ora.':'Microfono attivo: parla ora...');
-  rec.onresult=event=>{
+  $('handsfree-last-heard').textContent='In ascolto della prossima domanda…';
+  status(auto?'Ascolto continuo attivo: puoi parlare.':'Microfono attivo: parla ora…');
+  const closeAndDispatch=()=>{
+    if(closed)return;
+    closed=true;
+    if(finalizeTimer!==null)clearTimeout(finalizeTimer);
+    finalizeTimer=null;
     if(state.recognition!==rec)return;
-    const transcript=String(event.results?.[0]?.[0]?.transcript||'').trim();
-    if(!transcript)return;
-    heard=true;state.handsFreeIdleRestarts=0;
+    state.recognition=null;
+    $('mic-button').classList.remove('listening');
+    if(!state.active||state.mode!=='basic')return;
+    if(transcript){
+      // Chrome deve aver liberato il microfono PRIMA del nuovo invio
+      // a Gemini. Mai richiamare send() direttamente dentro onresult.
+      state.handsFreeIdleRestarts=0;
+      $('handsfree-last-heard').textContent='Hai detto: «'+transcript.slice(0,180)+'»';
+      void send(transcript);
+      return;
+    }
+    if(state.handsFree&&!state.busy&&!state.voiceCycleActive){
+      state.handsFreeIdleRestarts++;
+      if(state.handsFreeIdleRestarts>8){
+        stopHandsFree('Ascolto sospeso dopo un periodo senza domande. Riattivalo con un clic.');
+      }else{
+        $('handsfree-last-heard').textContent='Nessuna domanda rilevata; riprovo ad ascoltare…';
+        resumeHandsFree(900);
+      }
+    }
+  };
+  rec.onresult=event=>{
+    if(state.recognition!==rec||closed)return;
+    const results=event.results;
+    let value='';
+    for(let i=0;i<(results?.length||0);i++){
+      const alternative=results[i]?.[0];
+      if(alternative?.transcript)value=String(alternative.transcript).trim();
+    }
+    if(!value)return;
+    transcript=value;
+    $('handsfree-last-heard').textContent='Domanda riconosciuta: «'+value.slice(0,180)+'»';
+    status('Domanda riconosciuta. Attendo la chiusura del microfono prima di inviarla a Gemini…');
+    // Chrome può ritardare onend. Il timer è solo una rete di sicurezza
+    // dopo stop(): non si avviano richieste duplicate.
     try{rec.stop()}catch{}
-    void send(transcript);
+    if(finalizeTimer===null)finalizeTimer=setTimeout(closeAndDispatch,1000);
   };
   rec.onerror=event=>{
-    if(state.recognition!==rec)return;
+    if(state.recognition!==rec||closed)return;
     const code=event?.error||'errore';
     if(['not-allowed','service-not-allowed','audio-capture'].includes(code)){
-      stopHandsFree('Accesso al microfono negato o non disponibile: '+code+'. Controlla i permessi Chrome.');
+      transcript='';
+      state.recognition=null;
+      closed=true;
+      if(finalizeTimer!==null)clearTimeout(finalizeTimer);
+      try{rec.stop()}catch{}
+      stopHandsFree('Microfono non disponibile: '+code+'. Controlla i permessi Chrome.');
+      $('handsfree-last-heard').textContent='Microfono non disponibile: '+code;
     }else if(!['no-speech','aborted'].includes(code)){
-      if(state.handsFree)stopHandsFree('Ascolto continuo interrotto: '+code+'.');
-      else status('Microfono: '+code+'.',true);
+      transcript='';
+      if(state.handsFree){
+        state.recognition=null;
+        closed=true;
+        if(finalizeTimer!==null)clearTimeout(finalizeTimer);
+        try{rec.stop()}catch{}
+        stopHandsFree('Riconoscimento vocale interrotto: '+code+'.');
+      }else status('Microfono: '+code+'.',true);
+      $('handsfree-last-heard').textContent='Riconoscimento vocale: '+code;
     }
   };
-  rec.onend=()=>{
-    if(state.recognition!==rec)return;
-    state.recognition=null;
-    $('mic-button').classList.remove('listening');
-    if(!heard&&state.handsFree&&!state.busy&&!state.voiceCycleActive){
-      state.handsFreeIdleRestarts++;
-      if(state.handsFreeIdleRestarts>8)stopHandsFree('Ascolto sospeso dopo un periodo di silenzio. Puoi riattivarlo con un clic.');
-      else resumeHandsFree(900);
-    }
-  };
+  rec.onend=closeAndDispatch;
   try{rec.start();return true}catch(err){
+    closed=true;
+    if(finalizeTimer!==null)clearTimeout(finalizeTimer);
     state.recognition=null;
     $('mic-button').classList.remove('listening');
-    if(state.handsFree)stopHandsFree('Chrome non ha riattivato il microfono. Premi «Avvia ascolto continuo».');
+    $('handsfree-last-heard').textContent='Microfono non avviato';
+    if(state.handsFree)stopHandsFree('Chrome non ha riattivato il microfono. Premi nuovamente «Avvia ascolto continuo».');
     else status('Microfono: '+(err?.message||'avvio impossibile'),true);
     return false;
   }
@@ -1026,7 +1071,12 @@ function microphone(){
   }
   if(state.recognition){
     if(state.handsFree)stopHandsFree('Ascolto continuo disattivato.');
-    else{try{state.recognition.stop()}catch{}}
+    else{
+      const current=state.recognition;state.recognition=null;
+      try{current.stop()}catch{}
+      $('mic-button').classList.remove('listening');
+      $('handsfree-last-heard').textContent='Ascolto manuale interrotto.';
+    }
     return;
   }
   // Interrompe la voce dell'avatar e ascolta la nuova domanda.
