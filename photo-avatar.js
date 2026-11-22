@@ -1,4 +1,4 @@
-/* VIVA AI 2.4 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
+/* VIVA AI 2.5 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -40,7 +40,7 @@ export class PhotoAvatarMotion {
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=1.20; this.browIntensity=.35; this.freq=null;
-    this.lastFrameTime=0;
+    this.lastFrameTime=0;this.speechTimeline=null;
     this.eyes=[];this.blinkEnabled=false;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
     // WebGL è opzionale: il modulo viene caricato solo attivando le espressioni 2.0.
@@ -595,6 +595,25 @@ export class PhotoAvatarMotion {
     if(value){this.browserStart=performance.now();this.voiceExpressionStart=this.browserStart;this.run();}
     else {this.stopExpressions();this.resetHeadPose();this.reset();}
   }
+  setSpeechTimeline(timeline) {
+    // Timeline calcolata dal WAV Gemini: segue audio.currentTime (pause e seek compresi).
+    this.speechTimeline=timeline?.levels?.length>3&&timeline?.step>0?timeline:null;
+    this.lastFrameTime=0;
+  }
+  clearSpeechTimeline() {
+    this.speechTimeline=null;
+  }
+  sampleSpeechTimeline(seconds) {
+    const t=this.speechTimeline;
+    if(!t||!Number.isFinite(seconds)||seconds<0||seconds>t.duration+.1)return null;
+    const x=Math.max(0,Math.min(t.levels.length-1,seconds/t.step));
+    const first=Math.floor(x),second=Math.min(t.levels.length-1,first+1);
+    const mix=x-first;
+    return {
+      level: t.levels[first]*(1-mix)+t.levels[second]*mix,
+      shape: t.shapes[first]*(1-mix)+t.shapes[second]*mix
+    };
+  }
   armAudio() {
     try {
       if(!this.analyser) {
@@ -617,7 +636,10 @@ export class PhotoAvatarMotion {
   }
   async onAudioPlay(){
     if(!this.isVisible())return;
-    this.armAudio();this.voiceExpressionStart=performance.now();this.run();
+    // Se è disponibile la timeline WAV, non servono AudioContext né Analyser.
+    if(!this.speechTimeline)this.armAudio();
+    this.voiceExpressionStart=performance.now();
+    this.run();
   }
   onAudioStop(){
     if(!this.browserSpeaking){this.stopExpressions();this.resetHeadPose();}
@@ -654,6 +676,14 @@ export class PhotoAvatarMotion {
       const pause=(t>.8&&t<1.07)||(t>2.25&&t<2.56);
       target=pause?0:clamp(.05+.83*syllables,0,1);
       shapeTarget=clamp(.5+.23*Math.sin(t*3.5),.18,.83);
+    } else if(playing && this.speechTimeline){
+      const cues=this.sampleSpeechTimeline(this.audio.currentTime);
+      if(cues){
+        target=cues.level;
+        shapeTarget=cues.shape;
+      } else {
+        target=0;
+      }
     } else if(playing && this.analyser && this.audioContext?.state==='running'){
       this.analyser.getByteTimeDomainData(this.samples);
       let sum=0;
@@ -686,7 +716,7 @@ export class PhotoAvatarMotion {
       shapeTarget=clamp(.50+.20*Math.sin(t*2.45+.35*Math.sin(t*3.1)),.2,.8);
     }
     // Attacco più veloce, rilascio graduale. Il tempo è indipendente dagli FPS.
-    const smoothing=1-Math.exp(-dt/(target>this.level?42:78));
+    const smoothing=1-Math.exp(-dt/(target>this.level?(this.speechTimeline&&playing?30:42):(this.speechTimeline&&playing?57:78)));
     this.level+=(target-this.level)*smoothing;
     this.shape+=(shapeTarget-this.shape)*(1-Math.exp(-dt/90));
     if(this.level<.035)this.level=0;
@@ -760,7 +790,7 @@ export class PhotoAvatarMotion {
     ctx.restore(); // trasformazione discreta del volto
   }
   dispose(){
-    ++this.seq;this.stopExpressions();this.resetHeadPose();this.reset();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();this.clearBrows();this.warp?.dispose();this.warp=null;this.eyePending=false;this.eyeClicks=[];
+    ++this.seq;this.stopExpressions();this.clearSpeechTimeline();this.resetHeadPose();this.reset();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();this.clearBrows();this.warp?.dispose();this.warp=null;this.eyePending=false;this.eyeClicks=[];
     try{this.audioContext?.close();}catch{}
   }
 }
