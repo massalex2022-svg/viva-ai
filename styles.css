@@ -114,3 +114,42 @@
  0%,31%,66%,100%{opacity:0}
  42%,58%{opacity:.65}
 }
+
+/* VIVA AI 1.4.7 — palpebre con vera texture fotografica e contorni sfumati */
+.eye-lid-patch{
+  border-radius:49% 49% 48% 48% / 62% 62% 58% 58%;
+  -webkit-mask-image:radial-gradient(ellipse 74% 76% at 50% 50%,#000 55%,transparent 99%);
+  mask-image:radial-gradient(ellipse 74% 76% at 50% 50%,#000 55%,transparent 99%);
+}
+.eye-lid-top,.eye-lid-bottom{
+  background-size:100% 100%;
+  background-repeat:no-repeat;
+  box-shadow:none;
+  opacity:.98;
+  filter:blur(.25px);
+}
+.eye-lid-top{border-radius:48% 48% 10% 10%}
+.eye-lid-bottom{border-radius:10% 10% 48% 48%}
+.eye-lid-seam{
+  left:13%;right:13%;
+  height:1px;
+  background:rgba(55,36,35,.32);
+}
+.eye-lid-patch.blink-now .eye-lid-top,
+.eye-lid-patch.blink-now .eye-lid-bottom{
+  animation:viva-lid-close-147 var(--blink-duration,250ms) linear 1 both;
+}
+.eye-lid-patch.blink-now .eye-lid-seam{
+  animation:viva-lid-seam-147 var(--blink-duration,250ms) linear 1 both;
+}
+@keyframes viva-lid-close-147{
+  0%{transform:scaleY(0)}
+  10%{transform:scaleY(.07)}
+  38%,47%{transform:scaleY(1)}
+  70%{transform:scaleY(.33)}
+  100%{transform:scaleY(0)}
+}
+@keyframes viva-lid-seam-147{
+  0%,32%,67%,100%{opacity:0}
+  42%,50%{opacity:.42}
+}
