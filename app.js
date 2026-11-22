@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=280';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=290';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -10,6 +10,7 @@ const state = {
   voices: [], lastAgentMessage: '', voiceSource:'standard', voiceFile:null, voicePreviewUrl:null,
   convertedVoiceFile:null, playingUrl:null, speechJob:0, voiceEngine:'gemini',
   lastSpokenText:'', browserUtterance:null, browserStartTimer:null, browserWatchdogTimer:null, browserRetryTimer:null,
+  browserDiagnosticUtterance:null, browserDiagnosticTimer:null,
 };
 
 const motion = new PhotoAvatarMotion({
@@ -162,7 +163,9 @@ function stopSpokenAudio() {
   clearBrowserSpeechTimers();
   motion.setBrowserSpeaking(false);
   motion.clearSpeechTimeline();
-  if('speechSynthesis' in window) speechSynthesis.cancel();
+  if('speechSynthesis' in window && (state.browserUtterance||speechSynthesis.speaking||speechSynthesis.pending)) {
+    try{speechSynthesis.cancel();}catch(err){console.warn('VIVA AI: arresto voce Chrome non riuscito',err);}
+  }
   state.browserUtterance=null;
   const audio=$('generated-audio');
   audio.pause(); audio.removeAttribute('src'); audio.load(); audio.hidden=true;
@@ -293,10 +296,14 @@ async function checkWorker() {
   } catch(error) { settingsStatus(error.message,true); setConnection(false,'Non collegato'); }
 }
 function chooseVoice() {
-  const italian = state.voices.filter(v=>/^it[-_]/i.test(v.lang));
-  const preference = $('voice-choice').value;
-  const candidates = preference==='male' ? /(diego|cosimo|luca|marco|male|uomo|gianni|giorgio)/i : /(elsa|isabella|alice|female|donna|paola|lucia)/i;
-  return italian.find(v=>candidates.test(v.name)) || italian[0] || null;
+  const italian=state.voices.filter(v=>/^it[-_]/i.test(v.lang));
+  const local=italian.filter(v=>v.localService);
+  const available=local.length?local:italian;
+  const preference=$('voice-choice').value;
+  const candidates=preference==='male' ? /(diego|cosimo|luca|marco|male|uomo|gianni|giorgio)/i : /(elsa|isabella|alice|female|donna|paola|lucia)/i;
+  // Prima le voci locali: quelle di rete sono talvolta instabili su Chromebook.
+  // Nessuna voce italiana? Lascia che Chrome usi la sua voce predefinita.
+  return available.find(v=>candidates.test(v.name))||available[0]||null;
 }
 
 function voiceEngineChange(next) {
@@ -356,8 +363,8 @@ function speakBrowser(text,{direct=false}={}){
   $('replay-voice').hidden=false;
   clearBrowserSpeechTimers();
   motion.setBrowserSpeaking(false);
-  // Non accumulare frasi: ogni risposta sostituisce la sintesi precedente.
-  try{speechSynthesis.cancel();}catch(err){console.warn('VIVA AI: cancel voce',err);}
+  // stopSpokenAudio() ha già interrotto l'eventuale frase precedente.
+  // Un secondo cancel() immediato può bloccare la coda di Chrome.
   function begin(attempt){
     if(job!==state.speechJob||state.mode!=='basic')return;
     let started=false,finished=false;
@@ -444,6 +451,64 @@ function speakBrowser(text,{direct=false}={}){
     $('audio-state').textContent='◉ Avvio voce Chrome...';
     state.browserStartTimer=setTimeout(()=>{state.browserStartTimer=null;begin(0);},160);
   }
+}
+// Prova autonoma: speak() viene eseguito direttamente nel clic,
+// senza timer e senza alcuna chiamata a Gemini. Serve per capire se
+// il dispositivo ChromeOS può emettere la propria voce locale.
+function testChromeVoice(){
+  const display=$('chrome-voice-diagnostic');
+  if(!('speechSynthesis' in window)||!('SpeechSynthesisUtterance' in window)){
+    display.textContent='Il browser non espone la sintesi vocale Web Speech.';
+    return;
+  }
+  if(state.browserDiagnosticTimer!==null)clearTimeout(state.browserDiagnosticTimer);
+  state.browserDiagnosticTimer=null;
+  refreshVoices();
+  const all=state.voices;
+  const localItalian=all.filter(v=>/^it[-_]/i.test(v.lang)&&v.localService);
+  const italian=all.filter(v=>/^it[-_]/i.test(v.lang));
+  const voice=localItalian[0]||italian[0]||null;
+  const info='Voci trovate: '+all.length+'; italiane: '+italian.length+'; locali italiane: '+localItalian.length+'.';
+  let started=false,ended=false;
+  const utterance=new SpeechSynthesisUtterance('Ciao! Questa è una prova della voce Chrome.');
+  utterance.lang='it-IT';
+  utterance.rate=.94;
+  if(voice)utterance.voice=voice;
+  state.browserDiagnosticUtterance=utterance;
+  display.textContent='Prova voce in corso. '+info;
+  utterance.onstart=()=>{
+    started=true;
+    display.textContent='Chrome segnala che la prova vocale è iniziata. '+info+' Riesci a sentirla?';
+  };
+  utterance.onend=()=>{
+    ended=true;
+    if(state.browserDiagnosticTimer!==null)clearTimeout(state.browserDiagnosticTimer);
+    state.browserDiagnosticTimer=null;
+    state.browserDiagnosticUtterance=null;
+    display.textContent='Chrome segnala che la prova è terminata. '+info+' Se non hai sentito niente, controlliamo l’uscita audio del browser.';
+  };
+  utterance.onerror=ev=>{
+    ended=true;
+    if(state.browserDiagnosticTimer!==null)clearTimeout(state.browserDiagnosticTimer);
+    state.browserDiagnosticTimer=null;
+    state.browserDiagnosticUtterance=null;
+    display.textContent='Errore voce Chrome: '+(ev.error||'sconosciuto')+'. '+info;
+  };
+  try{
+    if(speechSynthesis.paused)speechSynthesis.resume();
+    // Essendo dentro il clic, non ritardare questa chiamata.
+    speechSynthesis.speak(utterance);
+  }catch(err){
+    state.browserDiagnosticUtterance=null;
+    display.textContent='Chrome non ha potuto avviare la voce: '+(err?.message||err)+'. '+info;
+    return;
+  }
+  state.browserDiagnosticTimer=setTimeout(()=>{
+    state.browserDiagnosticTimer=null;
+    if(!started&&!ended){
+      display.textContent='La prova non parte: '+info+' Motore Chrome (speaking='+speechSynthesis.speaking+', pending='+speechSynthesis.pending+', paused='+speechSynthesis.paused+').';
+    }
+  },5500);
 }
 async function playAudioBlob(blob,myJob) {
   if(myJob!==state.speechJob) return;
@@ -724,6 +789,7 @@ $('start-button').addEventListener('click',start);
 $('stop-button').addEventListener('click',stop);
 $('chat-form').addEventListener('submit',(e)=>{e.preventDefault();send($('message-input').value);});
 $('mic-button').addEventListener('click',microphone);
+$('test-chrome-voice').addEventListener('click',testChromeVoice);
 $('replay-voice').addEventListener('click',()=>{
   if(!state.lastSpokenText)return status('Non c’è ancora una risposta da riascoltare.');
   if(state.mode!=='basic')return status('Il riascolto Chrome è disponibile nella modalità fotografica.');
