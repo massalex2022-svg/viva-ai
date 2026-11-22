@@ -206,3 +206,7 @@
 .chrome-voice-check{display:grid;gap:7px;margin:11px 0 3px}
 .chrome-voice-check button{justify-self:start;max-width:100%;white-space:normal;text-align:left}
 .chrome-voice-check #chrome-voice-diagnostic{line-height:1.55;overflow-wrap:anywhere}
+
+/* VIVA AI 2.10 — verifica del motore vocale in due clic distinti */
+.chrome-voice-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chrome-voice-actions button{white-space:normal;text-align:left;min-height:40px}
