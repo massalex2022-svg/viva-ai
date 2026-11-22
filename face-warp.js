@@ -1,4 +1,4 @@
-/* VIVA AI 2.14 — deformazione fotogramma WebGL2.
+/* VIVA AI 2.15 — deformazione fotogramma WebGL2.
  * Basato sul prototipo VIVA AI 2.0 LAB già provato.
  * Usa solo i punti del volto e la foto già caricati in locale.
  * Importando questa classe NON si modifica la voce né si scaricano modelli aggiuntivi.
@@ -32,6 +32,7 @@ const frag = [
  'uniform vec2 u_eyeSize0;',
  'uniform vec2 u_eyeSize1;',
  'uniform float u_jaw;',
+ 'uniform float u_articulation;',
  'float softLocal(vec2 point,vec2 center,vec2 radius){',
  ' vec2 p=(point-center)/max(radius,vec2(0.0001));',
  ' return exp(-1.55*dot(p,p));',
@@ -63,6 +64,11 @@ const frag = [
  ' // Jaw deformation limited to the lower face; eyes and forehead are untouched.',
  ' vec2 mouthMid=(u_mouth0+u_mouth1)*0.5;',
  ' float mouthWidth=max(0.025,length(u_mouth1-u_mouth0));',
+ ' // Lieve restringimento/allargamento della zona delle labbra.',
+ ' // Segue una stima del timbro: non pretende di ricostruire i fonemi.',
+ ' float lipRadiusY=max(0.014,mouthWidth*u_aspect*0.37);',
+ ' float lipInfluence=softLocal(pos,mouthMid,vec2(mouthWidth*0.74,lipRadiusY));',
+ ' sampleUV.x+=(pos.x-mouthMid.x)*u_articulation*0.14*lipInfluence*clamp(u_jaw*1.4,0.0,1.0);',
  ' float below=max(0.0,pos.y-mouthMid.y);',
  ' float gate=smoothstep(0.002,max(0.025,u_eyeSpan*u_aspect*0.24),below);',
  ' float jawWeight=softLocal(pos,vec2(mouthMid.x,mouthMid.y+u_eyeSpan*u_aspect*0.34),',
@@ -111,7 +117,7 @@ export class FaceWarp {
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
-  const names=['u_portrait','u_brow0','u_brow1','u_mouth0','u_mouth1','u_eyeSpan','u_aspect','u_raise','u_smile','u_eye0','u_eye1','u_eyeSize0','u_eyeSize1','u_jaw'];
+  const names=['u_portrait','u_brow0','u_brow1','u_mouth0','u_mouth1','u_eyeSpan','u_aspect','u_raise','u_smile','u_eye0','u_eye1','u_eyeSize0','u_eyeSize1','u_jaw','u_articulation'];
   const u=Object.fromEntries(names.map(name=>[name,gl.getUniformLocation(p,name)]));
   gl.useProgram(p);gl.uniform1i(u.u_portrait,0);
   this.gl=gl;this.program=p;this.texture=texture;this.vao=vao;this.u=u;
@@ -147,7 +153,7 @@ export class FaceWarp {
    return false;
   }
  }
- render(brow=0,smile=0,jaw=0){
+ render(brow=0,smile=0,jaw=0,articulation=0){
   if(!this.ready)return null;
   try{
    const {gl,program,vao,texture,u,points}=this;
@@ -166,6 +172,7 @@ export class FaceWarp {
    gl.uniform2f(u.u_eyeSize0,points.eyeSizes[0].x,points.eyeSizes[0].y);
    gl.uniform2f(u.u_eyeSize1,points.eyeSizes[1].x,points.eyeSizes[1].y);
    gl.uniform1f(u.u_jaw,Math.max(0,Math.min(1,jaw)));
+   gl.uniform1f(u.u_articulation,Math.max(-.75,Math.min(.75,articulation)));
    gl.drawArrays(gl.TRIANGLES,0,6);
    return this.canvas;
   }catch(err){
