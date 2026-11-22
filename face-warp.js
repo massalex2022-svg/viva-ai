@@ -1,4 +1,4 @@
-/* VIVA AI 2.1 — deformazione fotogramma WebGL2.
+/* VIVA AI 2.2 — deformazione fotogramma WebGL2.
  * Basato sul prototipo VIVA AI 2.0 LAB già provato.
  * Usa solo i punti del volto e la foto già caricati in locale.
  * Importando questa classe NON si modifica la voce né si scaricano modelli aggiuntivi.
@@ -27,9 +27,30 @@ const frag = [
  'uniform float u_aspect;',
  'uniform float u_raise;',
  'uniform float u_smile;',
+ 'uniform vec2 u_eye0;',
+ 'uniform vec2 u_eye1;',
+ 'uniform vec2 u_eyeSize0;',
+ 'uniform vec2 u_eyeSize1;',
+ 'uniform float u_blink;',
  'float softLocal(vec2 point,vec2 center,vec2 radius){',
  ' vec2 p=(point-center)/max(radius,vec2(0.0001));',
  ' return exp(-1.55*dot(p,p));',
+ '}',
+ 'vec4 closedEye(vec2 uv,vec2 center,vec2 radius, float amount,vec4 current){',
+ '  vec2 n=(uv-center)/max(radius,vec2(0.00001));',
+ '  float edge=length(n);',
+ '  float inside=1.0-smoothstep(0.69,1.13,edge);',
+ '  float b=clamp(amount,0.0,1.0)*inside;',
+ '  // Campioni della pelle sopra e sotto l’occhio originale.',
+ '  vec2 upper=vec2(uv.x,center.y-radius.y*(1.55+0.10*clamp(-n.y,0.0,1.0)));',
+ '  vec2 lower=vec2(uv.x,center.y+radius.y*(1.65+0.10*clamp(n.y,0.0,1.0)));',
+ '  vec4 skinTop=texture(u_portrait,clamp(upper,vec2(0.001),vec2(0.999)));',
+ '  vec4 skinBottom=texture(u_portrait,clamp(lower,vec2(0.001),vec2(0.999)));',
+ '  float lowerMix=smoothstep(-0.13,0.13,n.y);',
+ '  vec4 skin=mix(skinTop,skinBottom,lowerMix);',
+ '  float crease=exp(-pow(n.y*14.0,2.0))*(1.0-smoothstep(0.20,0.93,abs(n.x)));',
+ '  skin.rgb*=1.0-0.075*crease*amount;',
+ '  return mix(current,skin,b);',
  '}',
  'void main(){',
  ' vec2 pos=v_uv;',
@@ -46,7 +67,12 @@ const frag = [
  '  softLocal(pos,u_mouth0,vec2(mouthRadiusX,mouthRadiusY))+',
  '  softLocal(pos,u_mouth1,vec2(mouthRadiusX,mouthRadiusY));',
  ' sampleUV.y+=u_smile*min(1.0,smileInfluence);',
- ' fragColor=texture(u_portrait,clamp(sampleUV,vec2(0.001),vec2(0.999)));',
+ ' vec4 pixel=texture(u_portrait,clamp(sampleUV,vec2(0.001),vec2(0.999)));',
+ ' if(u_blink>0.001){',
+ '   pixel=closedEye(pos,u_eye0,u_eyeSize0,u_blink,pixel);',
+ '   pixel=closedEye(pos,u_eye1,u_eyeSize1,u_blink,pixel);',
+ ' }',
+ ' fragColor=pixel;',
  '}'
 ].join('\n');
 
@@ -89,7 +115,7 @@ export class FaceWarp {
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
-  const names=['u_portrait','u_brow0','u_brow1','u_mouth0','u_mouth1','u_eyeSpan','u_aspect','u_raise','u_smile'];
+  const names=['u_portrait','u_brow0','u_brow1','u_mouth0','u_mouth1','u_eyeSpan','u_aspect','u_raise','u_smile','u_eye0','u_eye1','u_eyeSize0','u_eyeSize1','u_blink'];
   const u=Object.fromEntries(names.map(name=>[name,gl.getUniformLocation(p,name)]));
   gl.useProgram(p);gl.uniform1i(u.u_portrait,0);
   this.gl=gl;this.program=p;this.texture=texture;this.vao=vao;this.u=u;
@@ -111,7 +137,11 @@ export class FaceWarp {
    const a=normPt(eyes[0],w,h),b=normPt(eyes[1],w,h);
    const eyeSpan=Math.hypot(a.x-b.x,a.y-b.y);
    if(!Number.isFinite(eyeSpan)||eyeSpan<.04)throw Error('Distanza tra gli occhi insufficiente.');
-   this.points={brows:brows.map(p=>normPt(p,w,h)),mouth:mouthCorners.map(p=>normPt(p,w,h)),eyeSpan};
+   const dimensions=eyes.map(e=>({
+    x:Math.min(.14,Math.max(.008,(e.width||Math.abs(eyes[0].x-eyes[1].x)*.28)/w*.55)),
+    y:Math.min(.08,Math.max(.004,(e.height||Math.max(6,(e.width||35)*.17))/h*1.18))
+   }));
+   this.points={eyes:[a,b],eyeSizes:dimensions,brows:brows.map(p=>normPt(p,w,h)),mouth:mouthCorners.map(p=>normPt(p,w,h)),eyeSpan};
    this.ready=true;
    return true;
   }catch(err){
@@ -121,7 +151,7 @@ export class FaceWarp {
    return false;
   }
  }
- render(brow=0,smile=0){
+ render(brow=0,smile=0,blink=0){
   if(!this.ready)return null;
   try{
    const {gl,program,vao,texture,u,points}=this;
@@ -135,6 +165,11 @@ export class FaceWarp {
    gl.uniform1f(u.u_aspect,this.canvas.width/this.canvas.height);
    gl.uniform1f(u.u_raise,Math.max(0,Math.min(1,brow))*.028);
    gl.uniform1f(u.u_smile,Math.max(0,Math.min(1,smile))*.016);
+   gl.uniform2f(u.u_eye0,points.eyes[0].x,points.eyes[0].y);
+   gl.uniform2f(u.u_eye1,points.eyes[1].x,points.eyes[1].y);
+   gl.uniform2f(u.u_eyeSize0,points.eyeSizes[0].x,points.eyeSizes[0].y);
+   gl.uniform2f(u.u_eyeSize1,points.eyeSizes[1].x,points.eyeSizes[1].y);
+   gl.uniform1f(u.u_blink,Math.max(0,Math.min(1,blink)));
    gl.drawArrays(gl.TRIANGLES,0,6);
    return this.canvas;
   }catch(err){
