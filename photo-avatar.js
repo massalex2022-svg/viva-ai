@@ -1,4 +1,4 @@
-/* VIVA AI 1.4.7 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 1.5 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -29,12 +29,14 @@ export class PhotoAvatarMotion {
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=.75; this.freq=null;
     this.eyes=[];this.blinkEnabled=true;this.headEnabled=false;
+    this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
     this.blinkStart=-1;this.blinkTimer=null;this.blinkAmount=0;this.blinkDuration=245;
     this.browserSpeaking=false; this.browserStart=0;
     this.demoUntil=0;this.demoStart=0;this.manualPending=false;
     this.eyePending=false;this.eyeClicks=[];this.blinkTestTimer=null;
     this.diagTimer=null;this.diagOverlay=document.getElementById('eye-diagnostic-overlay');
     this.lidLayer=document.getElementById('eye-lid-layer');this.lidPatches=[];
+    this.browLayer=document.getElementById('brow-motion-layer');
     this.analyser=null; this.audioContext=null; this.samples=null;
     audio.addEventListener('play', () => { void this.onAudioPlay(); });
     audio.addEventListener('pause', () => this.onAudioStop());
@@ -57,6 +59,7 @@ export class PhotoAvatarMotion {
     this.canvas.hidden=!showingCanvas;
     if(this.photo.src && this.mode==='basic')this.photo.hidden=showingCanvas;
     if(this.lidLayer)this.lidLayer.hidden=!showingCanvas || !this.blinkEnabled || this.eyes.length!==2;
+    if(this.browLayer)this.browLayer.hidden=!showingCanvas || !this.expressionEnabled || this.browPatches.length!==2;
     const selecting=editing&&this.mode==='basic'&&this.enabled&&!!this.photo.src;
     this.selectLayer.hidden=!selecting;
     if(selecting){
@@ -79,7 +82,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null;this.eyes=[];this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
+    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
     this.manualPending=false;this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');this.onAudioStop();
     this.updateDisplay();
@@ -112,8 +115,13 @@ export class PhotoAvatarMotion {
         width
       };
       this.eyes=this.prepareEyes(points,w,h);
+      // FaceMesh: i punti 105 e 334 sono sulla zona delle sopracciglia.
+      // Associamo ciascun sopracciglio all'occhio più vicino nell'immagine.
+      const brows=[pt(105),pt(334)];
+      this.browAnchors=this.eyes.map(eye=>brows.reduce((best,p)=>
+        Math.abs(p.x-eye.cx)<Math.abs(best.x-eye.cx)?p:best,brows[0]));
       this.ready=true;
-      this.setupLids();
+      this.setupLids();this.setupBrows();
       this.level=0; this.draw(0); this.updateDisplay();
       this.scheduleBlink();
       this.status(this.eyes.length===2
@@ -162,7 +170,7 @@ export class PhotoAvatarMotion {
     const width=clamp(w*.13,22,Math.max(23,w*.2));
     this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
     this.ready=true;this.manualPending=false;this.photo.classList.remove('select-mouth');
-    this.setupLids();
+    this.setupLids();this.setupBrows();
     this.draw(0);this.updateDisplay();
     if(this.eyes.length)this.scheduleBlink();
     this.status(this.eyes.length===2
@@ -173,7 +181,7 @@ export class PhotoAvatarMotion {
     if(!this.enabled){this.status('Attiva «Anima le labbra» prima.');return;}
     if(!this.photo.src||!this.photo.naturalWidth){this.status('Carica prima una foto con gli occhi visibili.');return;}
     ++this.seq; // Non permettere al riconoscimento in corso di sovrascrivere la selezione.
-    this.clearBlink();this.clearEyeDiagnosis();this.reset();
+    this.clearBlink();this.clearEyeDiagnosis();this.stopExpressions();this.clearBrows();this.reset();
     if(!this.source){
       const w=Math.min(this.photo.naturalWidth,900),h=Math.round(this.photo.naturalHeight*w/this.photo.naturalWidth);
       this.canvas.width=w;this.canvas.height=h;
@@ -209,10 +217,11 @@ export class PhotoAvatarMotion {
     const eyeWidth=clamp(Math.min(mouthWidth*.76,sep*.58),Math.max(12,photoW*.022),photoW*.16);
     const angle=Math.atan2(second.y-first.y,second.x-first.x);
     this.eyes=[first,second].map(p=>({cx:p.x,cy:p.y,width:eyeWidth,height:eyeWidth*.20,angle}));
+    this.browAnchors=[]; // Le stime automatiche non valgono per occhi indicati manualmente.
     this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');
     this.ready=true;
-    this.setupLids();
+    this.setupLids();this.setupBrows();
     this.updateDisplay();
     this.draw(this.level,this.shape);this.scheduleBlink();
     this.status('Occhi posizionati! Premi «Prova battito palpebre»: ora funziona anche senza selezionare la bocca.');
@@ -242,6 +251,109 @@ export class PhotoAvatarMotion {
       eyeList.push({cx,cy,width:span,height:opening,angle});
     }
     return eyeList;
+  }
+  clearBrows() {
+    this.browPatches=[];
+    if(this.browLayer){this.browLayer.replaceChildren();this.browLayer.hidden=true;}
+  }
+  setupBrows() {
+    this.clearBrows();
+    if(!this.browLayer||this.eyes.length!==2||!this.source?.width)return;
+    const rect=this.browLayer.parentElement?.getBoundingClientRect();
+    if(!rect?.width||!rect?.height)return;
+    const scale=Math.max(rect.width/this.canvas.width,rect.height/this.canvas.height);
+    const offsetX=(rect.width-this.canvas.width*scale)*.5;
+    const offsetY=(rect.height-this.canvas.height*scale)*.3;
+    for(let i=0;i<2;i++){
+      const eye=this.eyes[i],b=this.browAnchors[i];
+      const cx=b?.x??eye.cx,cy=b?.y??eye.cy-eye.height*2.55;
+      const width=Math.max(8,eye.width*.80),height=Math.max(5,eye.height*.95);
+      const sx=clamp(cx-width*.5,0,Math.max(0,this.source.width-width));
+      const sy=clamp(cy-height*.5,0,Math.max(0,this.source.height-height));
+      const sw=Math.min(width,this.source.width-sx),sh=Math.min(height,this.source.height-sy);
+      if(sw<3||sh<3)continue;
+      let texture;
+      try{
+        const crop=document.createElement('canvas');
+        crop.width=Math.max(8,Math.round(sw));crop.height=Math.max(5,Math.round(sh));
+        crop.getContext('2d')?.drawImage(this.source,sx,sy,sw,sh,0,0,crop.width,crop.height);
+        texture=crop.toDataURL('image/png');
+      }catch(err){console.warn('VIVA AI: texture sopracciglia non disponibile',err);continue;}
+      const patch=document.createElement('div');
+      patch.className='brow-motion-patch';
+      patch.style.left=(offsetX+cx*scale)+'px';
+      patch.style.top=(offsetY+cy*scale)+'px';
+      patch.style.width=(sw*scale)+'px';
+      patch.style.height=(sh*scale)+'px';
+      patch.style.backgroundImage='url("'+texture+'")';
+      patch.style.setProperty('--brow-shift',(-Math.min(2.1,Math.max(.7,eye.height*scale*.10))).toFixed(2)+'px');
+      patch.style.setProperty('--brow-tilt',eye.angle+'rad');
+      this.browLayer.appendChild(patch);this.browPatches.push(patch);
+    }
+    this.browLayer.hidden=!this.expressionEnabled||!this.isVisible()||this.browPatches.length!==2;
+  }
+  triggerExpression() {
+    if(!this.expressionEnabled||!this.isVisible()||this.eyes.length!==2)return false;
+    if(this.browPatches.length!==2)this.setupBrows();
+    if(this.browPatches.length!==2)return false;
+    for(const patch of this.browPatches){
+      patch.classList.remove('expression-now');
+      void patch.offsetWidth;
+      patch.classList.add('expression-now');
+    }
+    return true;
+  }
+  stopExpressions() {
+    if(this.expressionTimer!==null)clearTimeout(this.expressionTimer);
+    this.expressionTimer=null;
+    for(const patch of this.browPatches)patch.classList.remove('expression-now');
+  }
+  scheduleExpression() {
+    if(this.expressionTimer!==null)clearTimeout(this.expressionTimer);
+    this.expressionTimer=null;
+    if(!this.expressionEnabled||!this.isVisible()||this.browPatches.length!==2)return;
+    this.expressionTimer=setTimeout(()=>{
+      this.expressionTimer=null;
+      const playing=!this.audio.paused&&!this.audio.ended&&!!this.audio.currentSrc;
+      if(!playing&&!this.browserSpeaking)return;
+      if(!document.hidden)this.triggerExpression();
+      this.scheduleExpression();
+    },3800+Math.random()*4600);
+  }
+  setExpressionEnabled(value) {
+    this.expressionEnabled=Boolean(value);
+    this.stopExpressions();
+    if(this.expressionEnabled){
+      if(this.browPatches.length!==2)this.setupBrows();
+      const playing=!this.audio.paused&&!this.audio.ended&&!!this.audio.currentSrc;
+      if(playing||this.browserSpeaking)this.scheduleExpression();
+    }
+    this.updateDisplay();
+  }
+  testExpression() {
+    if(!this.expressionEnabled){
+      this.status('Attiva la casella «Micro-espressioni», poi riprova.');return;
+    }
+    if(!this.isVisible()||this.eyes.length!==2){
+      this.status('Per le micro-espressioni carica una foto e indica prima entrambi gli occhi.');return;
+    }
+    if(this.triggerExpression())this.status('PROVA: sopracciglia leggermente sollevate, senza muovere la fotografia.');
+    else this.status('Non riesco a preparare le sopracciglia per questa foto. Prova un ritratto frontale.');
+  }
+  resetHeadPose(){
+    for(const node of [this.canvas,this.lidLayer,this.browLayer]){
+      if(node?.style)node.style.transform='';
+    }
+  }
+  updateHeadPose(time,active){
+    if(!this.headEnabled||!active){this.resetHeadPose();return;}
+    // Il canvas, le palpebre e le sopracciglia ruotano insieme.
+    // Ampiezza minuscola, senza traslazione verticale.
+    const degrees=Math.sin(time/1900)*.11;
+    const pose='rotate('+degrees.toFixed(3)+'deg) scale(1.003)';
+    for(const node of [this.canvas,this.lidLayer,this.browLayer]){
+      if(node?.style)node.style.transform=pose;
+    }
   }
   clearLids() {
     if(!this.lidLayer)return;
@@ -433,7 +545,7 @@ export class PhotoAvatarMotion {
   }
   setHeadEnabled(value) {
     this.headEnabled=Boolean(value);
-    if(this.ready)this.draw(this.level,this.shape);
+    if(!this.headEnabled)this.resetHeadPose();
   }
   paintEyes(ctx, blink) {
     if(blink<=.01||!this.eyes.length)return;
@@ -476,20 +588,20 @@ export class PhotoAvatarMotion {
   }
   setMode(mode) {
     this.mode=mode;
-    if(mode!=='basic'){this.reset();this.clearBlink();this.manualPending=false;this.eyePending=false;this.eyeClicks=[];}
-    else {this.setupLids();this.scheduleBlink();}
+    if(mode!=='basic'){this.stopExpressions();this.resetHeadPose();this.reset();this.clearBlink();this.manualPending=false;this.eyePending=false;this.eyeClicks=[];}
+    else {this.setupLids();this.setupBrows();this.scheduleBlink();}
     this.updateDisplay();
   }
   setEnabled(value) {
     this.enabled=Boolean(value);
-    if(!this.enabled){this.reset();this.clearBlink();this.manualPending=false;this.eyePending=false;this.eyeClicks=[];this.photo.classList.remove('select-mouth');}
+    if(!this.enabled){this.stopExpressions();this.resetHeadPose();this.reset();this.clearBlink();this.manualPending=false;this.eyePending=false;this.eyeClicks=[];this.photo.classList.remove('select-mouth');}
     if(this.enabled && !this.ready && this.photo.src) void this.loadPhoto();
     else {this.updateDisplay();if(this.enabled)this.scheduleBlink();}
   }
   setBrowserSpeaking(value) {
     this.browserSpeaking=Boolean(value);
-    if(value){this.browserStart=performance.now();this.run();}
-    else this.reset();
+    if(value){this.browserStart=performance.now();this.scheduleExpression();this.run();}
+    else {this.stopExpressions();this.resetHeadPose();this.reset();}
   }
   armAudio() {
     try {
@@ -513,10 +625,10 @@ export class PhotoAvatarMotion {
   }
   async onAudioPlay(){
     if(!this.isVisible())return;
-    this.armAudio();
-    this.run();
+    this.armAudio();this.scheduleExpression();this.run();
   }
   onAudioStop(){
+    if(!this.browserSpeaking){this.stopExpressions();this.resetHeadPose();}
     if(!this.browserSpeaking && this.demoUntil<performance.now() && this.blinkStart<0)this.reset();
   }
   run(){
@@ -526,6 +638,7 @@ export class PhotoAvatarMotion {
   reset(){
     if(this.frame)cancelAnimationFrame(this.frame);
     this.frame=0;this.level=0;this.shape=.48;
+    this.resetHeadPose();
     if(this.ready)this.draw(0,this.shape);
   }
   paint(time){
@@ -535,6 +648,7 @@ export class PhotoAvatarMotion {
     const demo=this.demoUntil>time;
     const blinking=this.blinkStart>=0;
     if(!playing && !this.browserSpeaking && !demo && !blinking){this.reset();return;}
+    this.updateHeadPose(time,playing||this.browserSpeaking);
     let target=0;
     let shapeTarget=.48;
     if(demo) {
@@ -589,14 +703,8 @@ export class PhotoAvatarMotion {
     const ctx=this.ctx, m=this.mouth, w=this.canvas.width, h=this.canvas.height;
     ctx.clearRect(0,0,w,h);
     ctx.save();
-    if(this.headEnabled && this.level>.08){
-      // Rotazione inferiore a 0.2 gradi, niente traslazione su/giù.
-      const angle=Math.sin(performance.now()/1700)*.0024*this.level;
-      ctx.translate(w*.5,h*.5);
-      ctx.rotate(angle);
-      ctx.scale(1.006,1.006);
-      ctx.translate(-w*.5,-h*.5);
-    }
+    // Gli eventuali movimenti della testa sono applicati a tutti gli strati DOM
+    // in updateHeadPose(), non solo al canvas.
     ctx.drawImage(this.source,0,0);
     if(!this.lidPatches.length)this.paintEyes(ctx,this.blinkAmount);
     const amount=m?clamp(openness*this.intensity,0,1):0;
@@ -653,7 +761,7 @@ export class PhotoAvatarMotion {
     ctx.restore(); // trasformazione discreta del volto
   }
   dispose(){
-    ++this.seq; this.reset();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();this.eyePending=false;this.eyeClicks=[];
+    ++this.seq;this.stopExpressions();this.resetHeadPose();this.reset();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();this.clearBrows();this.eyePending=false;this.eyeClicks=[];
     try{this.audioContext?.close();}catch{}
   }
 }
