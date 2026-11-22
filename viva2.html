@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="VIVA AI 2.0 LAB: prova gratuita di deformazione fotografica del viso con WebGL e MediaPipe, in locale nel browser.">
+  <title>VIVA AI 2.0 LAB · Prototipo volto dinamico</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#ebf5ff;background:#07121e}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 70% 0,#1a3550 0%,#07121e 57%);min-height:100vh}
+    .wrap{max-width:1200px;margin:auto;padding:24px 20px 52px}
+    header{display:flex;gap:16px;justify-content:space-between;align-items:center;margin-bottom:26px}
+    header a{color:#addbd9;text-decoration:none;font-size:14px}
+    h1{font-size:clamp(1.7rem,4vw,2.8rem);line-height:1.1;margin:.25rem 0 .6rem}
+    p{color:#b4cad7;line-height:1.55}
+    .eyebrow{letter-spacing:2px;font-weight:800;font-size:12px;color:#75e5d9}
+    .subtitle{max-width:740px}
+    .layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(300px,.8fr);gap:22px;align-items:start;margin-top:26px}
+    .panel{border:1px solid #37526b;background:#0f2130;border-radius:22px;padding:22px;box-shadow:0 15px 40px #0003}
+    .stage{position:relative;min-height:390px;border:2px dashed #40677b;background:linear-gradient(135deg,#10283c,#071723);border-radius:17px;overflow:hidden;display:grid;place-items:center;text-align:center}
+    .stage canvas{display:block;max-width:100%;max-height:70vh;width:auto;height:auto}
+    .stage.active{border:1px solid #507983}
+    .empty{padding:40px 22px;max-width:400px}
+    .empty .face{font-size:80px;margin-bottom:16px;opacity:.7}
+    .small{font-size:13px;color:#a8bfce}
+    .status{min-height:55px;padding:12px 14px;border-radius:11px;border:1px solid #345466;background:#0a1723;color:#bce6e2;font-size:14px;line-height:1.45;margin-top:16px}
+    .status.error{color:#ffbebd;border-color:#844b53}
+    button,.upload-label{display:inline-flex;align-items:center;justify-content:center;border-radius:12px;font:inherit;font-weight:700;padding:13px 17px;cursor:pointer;border:1px solid #547486;background:#172e40;color:#eef8ff;transition:background .15s}
+    button:hover:not(:disabled),.upload-label:hover{background:#24485b}
+    button:focus-visible,.upload-label:focus-visible,input:focus-visible{outline:3px solid #76e9d1;outline-offset:3px}
+    button:disabled{opacity:.4;cursor:not-allowed}
+    .primary,.upload-label{border:0;color:#082326;background:#7de6d8}
+    .primary:hover:not(:disabled),.upload-label:hover{background:#aff9e6}
+    input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+    .controls{display:flex;flex-direction:column;gap:16px}
+    .controls h2{font-size:1.16rem;margin:0}
+    .group{display:grid;gap:8px}
+    .group label{font-size:14px;color:#d7e6ee;font-weight:650}
+    .range{width:100%;accent-color:#7de6d8}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .check{display:flex;align-items:center;gap:10px;padding:12px;background:#102b3e;border:1px solid #2b4d5e;border-radius:12px;font-size:14px;cursor:pointer}
+    .check input{accent-color:#75e5d9;width:18px;height:18px}
+    .pill{display:inline-flex;background:#124940;color:#baf9dc;padding:7px 11px;border-radius:99px;font-size:12px;font-weight:750}
+    .notice{font-size:13px;padding:14px;border-left:3px solid #75e5d9;background:#122838;border-radius:5px;color:#b8ceda}
+    footer{margin-top:24px;font-size:12px;color:#8fa9ba;line-height:1.6}
+    @media(max-width:780px){.layout{grid-template-columns:1fr}.stage{min-height:320px}.wrap{padding:18px 14px}}
+  </style>
+</head>
+<body>
+ <div class="wrap">
+  <header><div class="eyebrow">VIVA AI · LABORATORIO 2.0</div><a href="./index.html">Torna a VIVA AI con Gemini</a></header>
+  <section>
+   <span class="pill">PROTOTIPO GRATUITO · NON FOTOREALISTICO</span>
+   <h1>Il volto si deforma davvero.</h1>
+   <p class="subtitle">Prima prova di espressioni facciali con <strong>MediaPipe + WebGL</strong>. A differenza delle vecchie sopracciglia ritagliate, questa tecnica sposta i pixel della fotografia con una deformazione graduale. Cominciamo dagli occhi e dal sorriso; la conversazione Gemini resta nell'app principale.</p>
+  </section>
+  <div class="layout">
+   <section class="panel">
+    <div class="stage" id="stage">
+      <div class="empty" id="empty"><div class="face" aria-hidden="true">◉</div><h2>Carica un ritratto frontale</h2><p>Il volto dovrebbe occupare buona parte della foto, con entrambi gli occhi visibili.</p></div>
+      <canvas id="warp-canvas" hidden aria-label="Ritratto animato con deformazione WebGL"></canvas>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite">In attesa della fotografia. Il file rimane nel browser, senza upload.</div>
+    <p class="small">Non vengono salvate fotografie o inviate al Worker Gemini. Il browser scarica soltanto il modello gratuito di riconoscimento facciale.</p>
+   </section>
+   <section class="panel controls">
+    <h2>Esperimenti sul volto</h2>
+    <div>
+      <label class="upload-label" for="photo-file">Carica una fotografia</label>
+      <input type="file" id="photo-file" accept="image/jpeg,image/png,image/webp" aria-label="Seleziona una fotografia">
+    </div>
+    <div class="group">
+      <label for="strength">Intensità della deformazione: <output id="strength-label">65%</output></label>
+      <input class="range" id="strength" type="range" min="15" max="100" step="5" value="65" disabled>
+      <span class="small">Prima prova l'intensità normale. Se il movimento è poco visibile, aumenta il cursore.</span>
+    </div>
+    <div class="actions">
+      <button id="test-brows" class="primary" disabled>Alza sopracciglia</button>
+      <button id="test-smile" disabled>Prova sorriso</button>
+    </div>
+    <label class="check"><input type="checkbox" id="automatic" disabled> Esegui micro-espressioni automatiche</label>
+    <label class="check"><input type="checkbox" id="original" disabled> Mostra la fotografia originale per confrontare</label>
+    <div class="notice"><strong>Questa è una prova tecnica separata.</strong> Qui testiamo il movimento dei lineamenti, senza toccare le risposte, la voce o le palpebre già funzionanti in VIVA AI.</div>
+   </section>
+  </div>
+  <footer>VIVA AI 2.0 LAB · Versione 2.0.0 · Elaborazione locale tramite WebGL e MediaPipe Face Landmarker. Per un avatar video fotorealistico servirebbe un modello di generazione più complesso.</footer>
+ </div>
+ <script type="module" src="./viva2.js?v=200"></script>
+</body>
+</html>
