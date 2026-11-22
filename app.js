@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=250';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=260';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -44,6 +44,52 @@ function applyMotionValues(mouth,brow,save=false){
     saveMotionValue(MOTION_STORAGE.mouth,m);
     saveMotionValue(MOTION_STORAGE.brow,b);
   }
+}
+// VIVA AI 2.6 — stile e variazione delle risposte. Nessuna chiamata aggiuntiva
+// finché Gemini non produce una risposta molto simile alle precedenti.
+const CONVERSATION_STYLES={
+  natural:'Tono caldo, spontaneo e misurato, come un dialogo naturale.',
+  lively:'Tono vivace, curioso e spiritoso quando opportuno, senza battute forzate.',
+  concise:'Tono diretto e sintetico: preferisci risposte brevi ma complete.'
+};
+function conversationStyle(){
+  const value=$('conversation-style').value;
+  return Object.hasOwn(CONVERSATION_STYLES,value)?value:'natural';
+}
+function conversationalPersonality(repeated=false){
+  const preferences=$('personality').value.trim();
+  const guidance=[
+    'Rispondi in italiano alla domanda concreta dell’ultimo messaggio.',
+    'Mantieni continuità con il dialogo e rispetta la personalità scelta.',
+    'Evita frasi preconfezionate, saluti continui, ripetizioni e domande generiche a ogni turno.',
+    'Varia la formulazione e fai domande soltanto se utili.',
+    'Non inventare fatti, esperienze o ricordi.',
+    CONVERSATION_STYLES[conversationStyle()]
+  ];
+  if(repeated)guidance.push('La tua prima risposta a questa domanda ripeteva una risposta già data: rispondi con contenuto nuovo e pertinente, senza riciclare la stessa formula.');
+  const guide=guidance.join(' ');
+  const maxUser=Math.max(100,900-guide.length-2);
+  return (preferences.slice(0,maxUser)+'\n\n'+guide).slice(0,900);
+}
+function normalizedReply(text){
+  return String(text||'').toLocaleLowerCase('it-IT').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+}
+function resemblesRecentAnswer(answer,messages){
+  const current=normalizedReply(answer);
+  if(current.length<42)return false;
+  const priorUsers=messages.filter(m=>m.role==='user').slice(-2);
+  // Se la persona ha ripetuto volutamente la stessa domanda, non forzare una variante.
+  if(priorUsers.length===2 && normalizedReply(priorUsers[0].text)===normalizedReply(priorUsers[1].text))return false;
+  return messages.filter(m=>m.role==='model').slice(-4).some(m=>{
+    const prev=normalizedReply(m.text);
+    if(prev.length<42)return false;
+    if(current===prev)return true;
+    const shorter=current.length<prev.length?current:prev;
+    const longer=current.length<prev.length?prev:current;
+    if(shorter.length/longer.length<.75)return false;
+    return longer.startsWith(shorter.slice(0,Math.floor(shorter.length*.88)));
+  });
 }
 function status(message, error=false) {
   $('status-message').textContent = message;
@@ -405,12 +451,27 @@ async function send(text) {
     } else {
       state.messages.push({role:'user',text:message});
       status('L’avatar sta pensando...');
-      const data=await chatWithRetry({
-        name:nameValue(),personality:$('personality').value,
+      const basePayload={
+        name:nameValue(),
+        personality:conversationalPersonality(),
         messages:state.messages.slice(-20),
-      });
-      const answer=data.answer;
+      };
+      const data=await chatWithRetry(basePayload);
+      let answer=String(data.answer||'').trim();
       if (!answer) throw Error('Gemini ha restituito una risposta vuota.');
+      if(resemblesRecentAnswer(answer,state.messages)){
+        // Una sola seconda richiesta, soltanto su ripetizioni molto evidenti.
+        // Se il secondo tentativo non riesce, manteniamo la prima risposta.
+        status('La risposta è troppo simile a una precedente. Provo a variarla...');
+        try{
+          const retry=await chatWithRetry({
+            ...basePayload,
+            personality:conversationalPersonality(true)
+          });
+          const alternative=String(retry.answer||'').trim();
+          if(alternative&&!resemblesRecentAnswer(alternative,state.messages))answer=alternative;
+        }catch(err){console.warn('VIVA AI: seconda formulazione non disponibile.',err);}
+      }
       state.messages.push({role:'model',text:answer});
       addMessage('assistant',answer);
       status('Risposta pronta. Puoi fare una nuova domanda.');
@@ -491,6 +552,14 @@ applyMotionValues(
   readMotionValue(MOTION_STORAGE.mouth,MOTION_DEFAULTS.mouth,.4,2.4),
   readMotionValue(MOTION_STORAGE.brow,MOTION_DEFAULTS.brow,0,150)
 );
+$('conversation-style').addEventListener('change',e=>{
+  try{localStorage.setItem('viva_conversation_style_26',conversationStyle());}catch{}
+  $('status-message').textContent='Stile aggiornato: sarà applicato dalla prossima risposta.';
+});
+try{
+  const saved=localStorage.getItem('viva_conversation_style_26');
+  if(saved&&Object.hasOwn(CONVERSATION_STYLES,saved))$('conversation-style').value=saved;
+}catch{}
 $('avatar-name').addEventListener('input',updateName);
 $('mode-basic').addEventListener('click',()=>modeChange('basic'));
 $('mode-live').addEventListener('click',()=>modeChange('live'));
