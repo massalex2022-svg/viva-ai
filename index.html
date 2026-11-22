@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.7 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=270">
+  <title>VIVA AI 2.8 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=280">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.7</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.8</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -119,7 +119,10 @@
         <p class="fineprint">Carica solo foto e campioni vocali che puoi usare legittimamente. L’avatar è generato dall’AI e non rappresenta dichiarazioni autentiche della persona ritratta.</p>
       </section>
       <section class="chat-panel" aria-label="Conversazione">
-        <div class="chat-header"><div><span class="eyebrow">CONVERSAZIONE</span><h2>Parla con <span id="chat-name">Alex</span></h2><p id="chat-subtitle">Una conversazione, infinite domande.</p></div><button class="ghost icon-button" id="clear-chat" title="Azzera la conversazione" type="button">↺</button></div>
+        <div class="chat-header"><div><span class="eyebrow">CONVERSAZIONE</span><h2>Parla con <span id="chat-name">Alex</span></h2><p id="chat-subtitle">Una conversazione, infinite domande.</p></div><div class="chat-header-actions">
+          <button class="ghost" id="replay-voice" type="button" hidden title="Leggi nuovamente l’ultima risposta usando la voce Chrome">🔊 Riascolta risposta</button>
+          <button class="ghost icon-button" id="clear-chat" title="Azzera la conversazione" type="button">↺</button>
+        </div></div>
         <div class="chat-scroll" id="chat-scroll" role="log" aria-live="polite" aria-relevant="additions">
           <div class="intro-bubble"><div class="intro-icon">✦</div><h3>Comincia quando vuoi</h3><p>Carica una foto, imposta l’avatar e premi <b>Avvia conversazione</b>. Puoi scrivere oppure parlare usando il microfono.</p><div class="suggestions"><button type="button" data-prompt="Ciao! Presentati e dimmi cosa sai fare.">Presentati</button><button type="button" data-prompt="Raccontami una curiosità sorprendente.">Sorprendimi</button><button type="button" data-prompt="Facciamo una conversazione naturale in italiano.">Parliamo</button></div></div>
         </div>
@@ -138,6 +141,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=270"></script>
+  <script type="module" src="app.js?v=280"></script>
 </body>
 </html>
