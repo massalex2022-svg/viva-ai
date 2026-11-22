@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2150';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2160';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -222,7 +222,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'Anteprima gratuita: voce Gemini, movimento labbra adattivo ai suoni, guance e sopracciglia espressive. Il nuovo movimento della bocca può essere disattivato; occhi fermi e nessuna oscillazione della foto.'
+    ? 'Anteprima gratuita: voce Gemini e labbra ricostruite dal contorno della tua fotografia, quando MediaPipe le rileva. Puoi confrontare il nuovo metodo con VIVA AI 2.15; occhi e inquadratura fermi.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -911,6 +911,20 @@ $('retry-gemini-tts').addEventListener('click',()=>{void retryGeminiVoiceNow()})
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('eyes-pick').addEventListener('click',()=>motion.pickEyes());
+const REAL_LIP_CONTOUR_KEY='viva_lip_contour_216';
+try{
+  $('lip-contour-enabled').checked=localStorage.getItem(REAL_LIP_CONTOUR_KEY)!=='false';
+}catch{
+  $('lip-contour-enabled').checked=true;
+}
+motion.setLipContourEnabled($('lip-contour-enabled').checked);
+$('lip-contour-enabled').addEventListener('change',e=>{
+  motion.setLipContourEnabled(e.target.checked);
+  try{localStorage.setItem(REAL_LIP_CONTOUR_KEY,String(e.target.checked))}catch{}
+  $('photo-motion-status').textContent=e.target.checked
+    ?'Contorno reale delle labbra attivo dove MediaPipe riconosce la bocca; in alternativa rimane il disegno classico.'
+    :'Contorno reale disattivato: le labbra utilizzano il disegno classico di VIVA AI 2.15.';
+});
 const LIP_ARTICULATION_KEY='viva_lip_articulation_215';
 try{
   $('lip-articulation-enabled').checked=localStorage.getItem(LIP_ARTICULATION_KEY)!=='false';
