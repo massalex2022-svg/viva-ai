@@ -195,3 +195,9 @@
 .conversation-style-field>span{font-size:13px;font-weight:750;color:#dbe6fa}
 .conversation-style-field select{width:100%;min-height:42px;border-radius:11px;border:1px solid #3b5373;background:#131f34;color:#e8f7ff;padding:10px 12px}
 .conversation-style-field small{font-size:11px;line-height:1.5;color:#a6b5ce}
+
+/* VIVA AI 2.8 — riascolto accessibile senza ripetere richieste Gemini */
+.chat-header-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.chat-header-actions #replay-voice{font-size:12px;padding:8px 10px;white-space:nowrap}
+.chat-header-actions #replay-voice[hidden]{display:none!important}
+@media(max-width:530px){.chat-header-actions #replay-voice{font-size:11px;padding:7px 9px}}
