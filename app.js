@@ -676,7 +676,8 @@ async function speak(text) {
   stopSpokenAudio();
   // La foto regola sorrisi e sopracciglia in modo molto discreto in base
   // alla risposta già ricevuta, senza chiamate AI aggiuntive.
-  motion.setResponseMood(text);
+  const lastQuestion=[...state.messages].reverse().find(message=>message.role==='user')?.text||'';
+  motion.setResponseMood(text,lastQuestion);
   state.lastSpokenText=String(text||'').trim();
   $('replay-voice').hidden=!state.lastSpokenText;
   const myJob=state.speechJob;
