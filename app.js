@@ -494,7 +494,7 @@ function speakBrowser(text,{direct=false}={}){
       }else{
         $('audio-state').textContent='● Voce Chrome bloccata';
         status('La voce Chrome non è partita. Premi «Riascolta risposta» per riattivarla.',true);
-        voiceCycleFinished();
+        voicePlaybackFailed();
       }
     };
     function retry(){
@@ -519,7 +519,7 @@ function speakBrowser(text,{direct=false}={}){
         state.browserUtterance=null;
         $('audio-state').textContent='● Voce Chrome bloccata';
         status('Chrome non riesce a leggere la risposta. Premi «Riascolta risposta».',true);
-        voiceCycleFinished();
+        voicePlaybackFailed();
       }
       return;
     }
@@ -532,7 +532,7 @@ function speakBrowser(text,{direct=false}={}){
         state.browserUtterance=null;
         $('audio-state').textContent='● Voce Chrome bloccata';
         status('Chrome ha preparato la risposta ma non ha avviato la voce. Premi «Riascolta risposta» per riprovare.',true);
-        voiceCycleFinished();
+        voicePlaybackFailed();
       }
     },2800);
   }
