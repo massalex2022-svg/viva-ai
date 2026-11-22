@@ -1,4 +1,4 @@
-/* VIVA AI 1.4.5 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 1.4.6 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -34,6 +34,7 @@ export class PhotoAvatarMotion {
     this.demoUntil=0;this.demoStart=0;this.manualPending=false;
     this.eyePending=false;this.eyeClicks=[];this.blinkTestTimer=null;
     this.diagTimer=null;this.diagOverlay=document.getElementById('eye-diagnostic-overlay');
+    this.lidLayer=document.getElementById('eye-lid-layer');this.lidPatches=[];
     this.analyser=null; this.audioContext=null; this.samples=null;
     audio.addEventListener('play', () => { void this.onAudioPlay(); });
     audio.addEventListener('pause', () => this.onAudioStop());
@@ -55,6 +56,7 @@ export class PhotoAvatarMotion {
     const showingCanvas=this.isVisible()&&!editing;
     this.canvas.hidden=!showingCanvas;
     if(this.photo.src && this.mode==='basic')this.photo.hidden=showingCanvas;
+    if(this.lidLayer)this.lidLayer.hidden=!showingCanvas || !this.blinkEnabled || this.eyes.length!==2;
     const selecting=editing&&this.mode==='basic'&&this.enabled&&!!this.photo.src;
     this.selectLayer.hidden=!selecting;
     if(selecting){
@@ -77,7 +79,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null;this.eyes=[];this.clearBlink();this.clearEyeDiagnosis();
+    this.ready=false; this.mouth=null;this.eyes=[];this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
     this.manualPending=false;this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');this.onAudioStop();
     this.updateDisplay();
@@ -111,6 +113,7 @@ export class PhotoAvatarMotion {
       };
       this.eyes=this.prepareEyes(points,w,h);
       this.ready=true;
+      this.setupLids();
       this.level=0; this.draw(0); this.updateDisplay();
       this.scheduleBlink();
       this.status(this.eyes.length===2
@@ -159,6 +162,7 @@ export class PhotoAvatarMotion {
     const width=clamp(w*.13,22,Math.max(23,w*.2));
     this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
     this.ready=true;this.manualPending=false;this.photo.classList.remove('select-mouth');
+    this.setupLids();
     this.draw(0);this.updateDisplay();
     if(this.eyes.length)this.scheduleBlink();
     this.status(this.eyes.length===2
@@ -208,6 +212,7 @@ export class PhotoAvatarMotion {
     this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');
     this.ready=true;
+    this.setupLids();
     this.updateDisplay();
     this.draw(this.level,this.shape);this.scheduleBlink();
     this.status('Occhi posizionati! Premi «Prova battito palpebre»: ora funziona anche senza selezionare la bocca.');
@@ -238,10 +243,69 @@ export class PhotoAvatarMotion {
     }
     return eyeList;
   }
+  clearLids() {
+    if(!this.lidLayer)return;
+    this.lidPatches=[];
+    this.lidLayer.replaceChildren();
+    this.lidLayer.hidden=true;
+  }
+  skinColorAt(x,y) {
+    // Colore locale preso dalla stessa foto (non un colore della pelle predefinito).
+    const ctx=this.source?.getContext?.('2d',{willReadFrequently:true});
+    if(!ctx)return 'rgb(179,145,129)';
+    const sx=clamp(Math.round(x)-3,0,Math.max(0,this.canvas.width-7));
+    const sy=clamp(Math.round(y)-3,0,Math.max(0,this.canvas.height-7));
+    try {
+      const px=ctx.getImageData(sx,sy,7,7).data;
+      let r=0,g=0,b=0,n=0;
+      for(let i=0;i<px.length;i+=4){
+        if(px[i+3]<100)continue;
+        r+=px[i];g+=px[i+1];b+=px[i+2];n++;
+      }
+      return n?'rgb('+Math.round(r/n)+','+Math.round(g/n)+','+Math.round(b/n)+')':'rgb(179,145,129)';
+    }catch{return 'rgb(179,145,129)';}
+  }
+  setupLids() {
+    this.clearLids();
+    if(!this.lidLayer||this.eyes.length!==2||!this.source||!this.canvas.width)return;
+    const rect=this.lidLayer.parentElement?.getBoundingClientRect();
+    if(!rect?.width||!rect?.height)return;
+    const scale=Math.max(rect.width/this.canvas.width,rect.height/this.canvas.height);
+    const offsetX=(rect.width-this.canvas.width*scale)*.5;
+    const offsetY=(rect.height-this.canvas.height*scale)*.3;
+    for(const eye of this.eyes){
+      const patch=document.createElement('div');
+      patch.className='eye-lid-patch';
+      patch.style.left=(offsetX+eye.cx*scale)+'px';
+      patch.style.top=(offsetY+eye.cy*scale)+'px';
+      patch.style.width=(eye.width*scale*1.16)+'px';
+      patch.style.height=(eye.height*scale*3.0)+'px';
+      patch.style.setProperty('--eye-tilt',eye.angle+'rad');
+      const top=document.createElement('div'),bottom=document.createElement('div'),seam=document.createElement('div');
+      top.className='eye-lid-top';bottom.className='eye-lid-bottom';seam.className='eye-lid-seam';
+      top.style.backgroundColor=this.skinColorAt(eye.cx,eye.cy-eye.height*2.1);
+      bottom.style.backgroundColor=this.skinColorAt(eye.cx,eye.cy+eye.height*2.2);
+      patch.appendChild(top);patch.appendChild(bottom);patch.appendChild(seam);
+      this.lidLayer.appendChild(patch);this.lidPatches.push(patch);
+    }
+    this.lidLayer.hidden=!this.isVisible()||!this.blinkEnabled||this.manualPending||this.eyePending;
+  }
+  playLidBlink(duration) {
+    if(!this.lidPatches.length)this.setupLids();
+    if(!this.lidPatches.length)return;
+    for(const patch of this.lidPatches){
+      patch.classList.remove('blink-now');
+      patch.style.setProperty('--blink-duration',duration+'ms');
+      // Riavvio indipendente dall'animazione canvas: evita i fotogrammi bloccati.
+      void patch.offsetWidth;
+      patch.classList.add('blink-now');
+    }
+  }
   clearBlink() {
     if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
     if(this.blinkTestTimer!==null)clearTimeout(this.blinkTestTimer);
     this.blinkTimer=null;this.blinkTestTimer=null;this.blinkStart=-1;this.blinkAmount=0;
+    for(const patch of this.lidPatches)patch.classList.remove('blink-now');
   }
   scheduleBlink() {
     if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
@@ -256,6 +320,7 @@ export class PhotoAvatarMotion {
   startBlink(duration=245) {
     if(!this.isVisible()||!this.blinkEnabled||!this.eyes.length)return false;
     this.blinkDuration=duration;
+    this.playLidBlink(duration);
     this.blinkStart=performance.now();
     this.blinkAmount=0;
     this.run();
@@ -308,20 +373,21 @@ export class PhotoAvatarMotion {
     if(!this.photo.src||!this.photo.naturalWidth){
       this.status('TEST NON AVVIATO: carica prima la fotografia e attendi che compaia.');return;
     }
-    const diagnostic=this.showEyeDiagnosis();
-    if(diagnostic==='unavailable'){
-      this.status('TEST NON DISPONIBILE: non riesco a visualizzare il riquadro diagnostico. Inviami uno screenshot della pagina.');return;
-    }
-    if(diagnostic==='preview'){
-      this.status('TEST GRAFICO ATTIVO: dovresti vedere due cerchi verdi e la scritta OCCHI NON CONFIGURATI. Poi premi «Indica gli occhi» e segnali entrambi.');return;
+    this.clearEyeDiagnosis();
+    if(this.eyes.length!==2){
+      this.status('Seleziona prima i due occhi con «Indica gli occhi sulla foto».');return;
     }
     if(!this.blinkEnabled){
-      this.status('I cerchi indicano gli occhi, ma il battito è disattivato: seleziona «Battito delle palpebre».');return;
+      this.status('Attiva prima la casella «Battito delle palpebre».');return;
     }
     if(!this.isVisible()){
-      this.status('I cerchi indicano gli occhi, ma il disegno non è pronto: carica di nuovo la foto.');return;
+      this.status('Animazione non pronta. Verifica che sia attiva la modalità «Voce AI + labbra 2D».');return;
     }
-    this.status('TEST AVVIATO: due cerchi verdi mostrano dove l’app rileva gli occhi. Dovresti vedere due chiusure lente.');
+    this.setupLids();
+    if(this.lidPatches.length!==2){
+      this.status('Non riesco a mostrare le palpebre sulla foto. Inviami uno screenshot.');return;
+    }
+    this.status('TEST PALPEBRE: gli occhi si chiudono due volte lentamente. I cerchi verdi sono disattivati.');
     if(this.blinkTestTimer!==null)clearTimeout(this.blinkTestTimer);
     if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
     this.blinkTestTimer=null;this.blinkTimer=null;
@@ -333,6 +399,7 @@ export class PhotoAvatarMotion {
   setBlinkEnabled(value) {
     this.blinkEnabled=Boolean(value);
     this.clearBlink();
+    if(this.lidLayer)this.lidLayer.hidden=!this.isVisible()||!this.blinkEnabled;
     if(this.blinkEnabled)this.scheduleBlink();
     if(this.ready)this.draw(this.level,this.shape);
   }
@@ -382,7 +449,7 @@ export class PhotoAvatarMotion {
   setMode(mode) {
     this.mode=mode;
     if(mode!=='basic'){this.reset();this.clearBlink();this.manualPending=false;this.eyePending=false;this.eyeClicks=[];}
-    else this.scheduleBlink();
+    else {this.setupLids();this.scheduleBlink();}
     this.updateDisplay();
   }
   setEnabled(value) {
@@ -503,7 +570,7 @@ export class PhotoAvatarMotion {
       ctx.translate(-w*.5,-h*.5);
     }
     ctx.drawImage(this.source,0,0);
-    this.paintEyes(ctx,this.blinkAmount);
+    if(!this.lidPatches.length)this.paintEyes(ctx,this.blinkAmount);
     const amount=m?clamp(openness*this.intensity,0,1):0;
     if(amount<.07||!m){ctx.restore();return;}
 
@@ -558,7 +625,7 @@ export class PhotoAvatarMotion {
     ctx.restore(); // trasformazione discreta del volto
   }
   dispose(){
-    ++this.seq; this.reset();this.clearBlink();this.clearEyeDiagnosis();this.eyePending=false;this.eyeClicks=[];
+    ++this.seq; this.reset();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();this.eyePending=false;this.eyeClicks=[];
     try{this.audioContext?.close();}catch{}
   }
 }
