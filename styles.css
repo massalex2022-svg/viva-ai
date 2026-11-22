@@ -239,3 +239,10 @@
 .voice-playback-recovery #play-gemini-audio[hidden]{display:none!important}
 .voice-playback-recovery #voice-playback-status{font-size:11px;line-height:1.5;color:#ffdbb6;overflow-wrap:anywhere}
 .voice-playback-recovery #voice-playback-status:empty{display:none}
+
+/* VIVA AI 2.23 — mostra separatamente gli errori Gemini TTS dalla voce Chrome */
+.voice-playback-recovery #retry-last-gemini{width:100%;min-height:48px;text-align:center;white-space:normal;font-size:14px;font-weight:800}
+.voice-playback-recovery #retry-last-gemini[hidden]{display:none!important}
+.voice-playback-recovery #retry-last-gemini:disabled{opacity:.58;cursor:wait}
+.voice-playback-recovery #gemini-voice-issue{font-size:12px;line-height:1.55;color:#ffdbb6;overflow-wrap:anywhere}
+.voice-playback-recovery #gemini-voice-issue:empty{display:none}
