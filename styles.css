@@ -185,3 +185,7 @@
 @media(prefers-reduced-motion:reduce){
   .brow-motion-patch.expression-now{animation-duration:250ms}
 }
+
+/* VIVA AI 2.4 — aiuto regolazioni persistenti */
+.motion-settings-hint{font-size:11px;line-height:1.5;color:#a1b7c9;margin:10px 0 8px}
+#motion-reset{border-style:dashed;opacity:.92}
