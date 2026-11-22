@@ -1,4 +1,4 @@
-/* VIVA AI 2.16 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
+/* VIVA AI 2.17 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -41,7 +41,7 @@ export class PhotoAvatarMotion {
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=1.20; this.browIntensity=.35; this.freq=null;
     this.articulationEnabled=true;this.lipPalette=null;this.lipContour=null;this.lipContourEnabled=true;
-    this.lastFrameTime=0;this.speechTimeline=null;
+    this.lastFrameTime=0;this.speechTimeline=null;this.fluidLipEnabled=true;this.silentMs=0;
     this.eyes=[];this.blinkEnabled=false;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
     // WebGL è opzionale: il modulo viene caricato solo attivando le espressioni 2.0.
@@ -615,6 +615,12 @@ export class PhotoAvatarMotion {
       }
     }
   }
+  setFluidLipEnabled(value){
+    this.fluidLipEnabled=Boolean(value);
+    this.silentMs=0;
+    this.lastFrameTime=0;
+    if(this.ready&&!this.frame)this.draw(this.level,this.shape);
+  }
   setLipContourEnabled(value){
     this.lipContourEnabled=Boolean(value);
     if(this.ready&&!this.frame)this.draw(this.level,this.shape);
@@ -755,10 +761,10 @@ export class PhotoAvatarMotion {
   setSpeechTimeline(timeline) {
     // Timeline calcolata dal WAV Gemini: segue audio.currentTime (pause e seek compresi).
     this.speechTimeline=timeline?.levels?.length>3&&timeline?.step>0?timeline:null;
-    this.lastFrameTime=0;
+    this.lastFrameTime=0;this.silentMs=0;
   }
   clearSpeechTimeline() {
-    this.speechTimeline=null;
+    this.speechTimeline=null;this.silentMs=0;
   }
   sampleSpeechTimeline(seconds) {
     const t=this.speechTimeline;
@@ -766,9 +772,18 @@ export class PhotoAvatarMotion {
     const x=Math.max(0,Math.min(t.levels.length-1,seconds/t.step));
     const first=Math.floor(x),second=Math.min(t.levels.length-1,first+1);
     const mix=x-first;
+    const baseShape=t.shapes[first]*(1-mix)+t.shapes[second]*mix;
+    let shape=baseShape;
+    if(this.fluidLipEnabled){
+      // Sfumatura discreta fra i timbri vicini: niente bruschi scatti
+      // ad ogni finestra WAV da circa 20 millisecondi.
+      const sample=index=>t.shapes[clamp(index,0,t.shapes.length-1)];
+      shape=baseShape*.68+sample(Math.max(0,first-1))*.16+
+        sample(Math.min(t.shapes.length-1,second+1))*.16;
+    }
     return {
       level: t.levels[first]*(1-mix)+t.levels[second]*mix,
-      shape: t.shapes[first]*(1-mix)+t.shapes[second]*mix
+      shape
     };
   }
   armAudio() {
@@ -808,7 +823,7 @@ export class PhotoAvatarMotion {
   }
   reset(){
     if(this.frame)cancelAnimationFrame(this.frame);
-    this.frame=0;this.level=0;this.shape=.48;this.lastFrameTime=0;
+    this.frame=0;this.level=0;this.shape=.48;this.lastFrameTime=0;this.silentMs=0;
     this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
     this.expressionAccent=0;this.expressionBrow=0;this.expressionSmile=0;
     this.previousVoiceLevel=0;this.lastAccentAt=-Infinity;
@@ -873,10 +888,25 @@ export class PhotoAvatarMotion {
       target=pause?0:clamp(.08+.77*syllables,0,1);
       shapeTarget=clamp(.50+.20*Math.sin(t*2.45+.35*Math.sin(t*3.1)),.2,.8);
     }
-    // Attacco più veloce, rilascio graduale. Il tempo è indipendente dagli FPS.
-    const smoothing=1-Math.exp(-dt/(target>this.level?(this.speechTimeline&&playing?30:42):(this.speechTimeline&&playing?57:78)));
-    this.level+=(target-this.level)*smoothing;
-    this.shape+=(shapeTarget-this.shape)*(1-Math.exp(-dt/90));
+    // Transizioni labiali 2.17: gli intervalli brevissimi fra sillabe
+    // sono morbidi, le pause più lunghe invece chiudono la bocca.
+    // Funziona solo col WAV Gemini; il motore Chrome resta invariato.
+    const withGeminiWav=this.fluidLipEnabled&&playing&&!!this.speechTimeline&&!demo;
+    if(withGeminiWav){
+      this.silentMs=target<.052?Math.min(1000,this.silentMs+dt):0;
+      const attack=30;
+      const release=this.silentMs>90?29:72;
+      const responseMs=target>this.level?attack:release;
+      this.level+=(target-this.level)*(1-Math.exp(-dt/responseMs));
+      const intendedShape=this.silentMs>90?.48:shapeTarget;
+      this.shape+=(intendedShape-this.shape)*(1-Math.exp(-dt/(this.silentMs>90?65:110)));
+    }else{
+      this.silentMs=0;
+      // Comportamento originale 2.16 disponibile disattivando la novità.
+      const smoothing=1-Math.exp(-dt/(target>this.level?(this.speechTimeline&&playing?30:42):(this.speechTimeline&&playing?57:78)));
+      this.level+=(target-this.level)*smoothing;
+      this.shape+=(shapeTarget-this.shape)*(1-Math.exp(-dt/90));
+    }
     if(this.level<.035)this.level=0;
     this.updateWarpMotion(time,playing||this.browserSpeaking,demoExpression,dt);
     // La mandibola segue la stessa timeline del parlato.
