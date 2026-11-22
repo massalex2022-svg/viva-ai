@@ -1,4 +1,4 @@
-/* VIVA AI 1.5 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 2.1 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -30,6 +30,9 @@ export class PhotoAvatarMotion {
     this.shape=.48; this.intensity=.75; this.freq=null;
     this.eyes=[];this.blinkEnabled=true;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
+    // WebGL è opzionale: il modulo viene caricato solo attivando le espressioni 2.0.
+    this.warp=null;this.warpConstructor=null;this.warpModulePromise=null;this.warpRaise=0;this.warpSmile=0;
+    this.expressionDemoStart=0;this.expressionDemoUntil=0;this.voiceExpressionStart=0;
     this.blinkStart=-1;this.blinkTimer=null;this.blinkAmount=0;this.blinkDuration=245;
     this.browserSpeaking=false; this.browserStart=0;
     this.demoUntil=0;this.demoStart=0;this.manualPending=false;
@@ -59,7 +62,7 @@ export class PhotoAvatarMotion {
     this.canvas.hidden=!showingCanvas;
     if(this.photo.src && this.mode==='basic')this.photo.hidden=showingCanvas;
     if(this.lidLayer)this.lidLayer.hidden=!showingCanvas || !this.blinkEnabled || this.eyes.length!==2;
-    if(this.browLayer)this.browLayer.hidden=!showingCanvas || !this.expressionEnabled || this.browPatches.length!==2;
+    if(this.browLayer)this.browLayer.hidden=true; // Vecchie patch CSS disattivate: deformazione WebGL sul canvas.
     const selecting=editing&&this.mode==='basic'&&this.enabled&&!!this.photo.src;
     this.selectLayer.hidden=!selecting;
     if(selecting){
@@ -82,7 +85,7 @@ export class PhotoAvatarMotion {
   }
   async loadPhoto() {
     const seq=++this.seq;
-    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
+    this.ready=false; this.mouth=null;this.eyes=[];this.browAnchors=[];this.warpRaise=0;this.warpSmile=0;if(this.warp)this.warp.ready=false;this.stopExpressions();this.clearBrows();this.resetHeadPose();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();
     this.manualPending=false;this.eyePending=false;this.eyeClicks=[];
     this.photo.classList.remove('select-mouth');this.onAudioStop();
     this.updateDisplay();
@@ -122,6 +125,7 @@ export class PhotoAvatarMotion {
         Math.abs(p.x-eye.cx)<Math.abs(best.x-eye.cx)?p:best,brows[0]));
       this.ready=true;
       this.setupLids();this.setupBrows();
+      if(this.expressionEnabled)void this.prepareWarp();
       this.level=0; this.draw(0); this.updateDisplay();
       this.scheduleBlink();
       this.status(this.eyes.length===2
@@ -171,6 +175,8 @@ export class PhotoAvatarMotion {
     this.mouth={cx:x,top:y-width*.022,bottom:y+width*.022,outer:y+width*.16,width};
     this.ready=true;this.manualPending=false;this.photo.classList.remove('select-mouth');
     this.setupLids();this.setupBrows();
+    if(this.warp)this.warp.ready=false;
+    if(this.expressionEnabled)void this.prepareWarp();
     this.draw(0);this.updateDisplay();
     if(this.eyes.length)this.scheduleBlink();
     this.status(this.eyes.length===2
@@ -222,6 +228,8 @@ export class PhotoAvatarMotion {
     this.photo.classList.remove('select-mouth');
     this.ready=true;
     this.setupLids();this.setupBrows();
+    if(this.warp)this.warp.ready=false;
+    if(this.expressionEnabled)void this.prepareWarp();
     this.updateDisplay();
     this.draw(this.level,this.shape);this.scheduleBlink();
     this.status('Occhi posizionati! Premi «Prova battito palpebre»: ora funziona anche senza selezionare la bocca.');
@@ -256,89 +264,99 @@ export class PhotoAvatarMotion {
     this.browPatches=[];
     if(this.browLayer){this.browLayer.replaceChildren();this.browLayer.hidden=true;}
   }
-  setupBrows() {
-    this.clearBrows();
-    if(!this.browLayer||this.eyes.length!==2||!this.source?.width)return;
-    const rect=this.browLayer.parentElement?.getBoundingClientRect();
-    if(!rect?.width||!rect?.height)return;
-    const scale=Math.max(rect.width/this.canvas.width,rect.height/this.canvas.height);
-    const offsetX=(rect.width-this.canvas.width*scale)*.5;
-    const offsetY=(rect.height-this.canvas.height*scale)*.3;
-    for(let i=0;i<2;i++){
-      const eye=this.eyes[i],b=this.browAnchors[i];
-      const cx=b?.x??eye.cx,cy=b?.y??eye.cy-eye.height*2.55;
-      const width=Math.max(8,eye.width*.80),height=Math.max(5,eye.height*.95);
-      const sx=clamp(cx-width*.5,0,Math.max(0,this.source.width-width));
-      const sy=clamp(cy-height*.5,0,Math.max(0,this.source.height-height));
-      const sw=Math.min(width,this.source.width-sx),sh=Math.min(height,this.source.height-sy);
-      if(sw<3||sh<3)continue;
-      let texture;
-      try{
-        const crop=document.createElement('canvas');
-        crop.width=Math.max(8,Math.round(sw));crop.height=Math.max(5,Math.round(sh));
-        crop.getContext('2d')?.drawImage(this.source,sx,sy,sw,sh,0,0,crop.width,crop.height);
-        texture=crop.toDataURL('image/png');
-      }catch(err){console.warn('VIVA AI: texture sopracciglia non disponibile',err);continue;}
-      const patch=document.createElement('div');
-      patch.className='brow-motion-patch';
-      patch.style.left=(offsetX+cx*scale)+'px';
-      patch.style.top=(offsetY+cy*scale)+'px';
-      patch.style.width=(sw*scale)+'px';
-      patch.style.height=(sh*scale)+'px';
-      patch.style.backgroundImage='url("'+texture+'")';
-      patch.style.setProperty('--brow-shift',(-Math.min(2.1,Math.max(.7,eye.height*scale*.10))).toFixed(2)+'px');
-      patch.style.setProperty('--brow-tilt',eye.angle+'rad');
-      this.browLayer.appendChild(patch);this.browPatches.push(patch);
-    }
-    this.browLayer.hidden=!this.expressionEnabled||!this.isVisible()||this.browPatches.length!==2;
-  }
-  triggerExpression() {
-    if(!this.expressionEnabled||!this.isVisible()||this.eyes.length!==2)return false;
-    if(this.browPatches.length!==2)this.setupBrows();
-    if(this.browPatches.length!==2)return false;
-    for(const patch of this.browPatches){
-      patch.classList.remove('expression-now');
-      void patch.offsetWidth;
-      patch.classList.add('expression-now');
-    }
-    return true;
-  }
+  setupBrows() { this.clearBrows(); } // vecchie patch eliminate (erano quasi invisibili).
   stopExpressions() {
     if(this.expressionTimer!==null)clearTimeout(this.expressionTimer);
     this.expressionTimer=null;
-    for(const patch of this.browPatches)patch.classList.remove('expression-now');
+    this.expressionDemoUntil=0;
+    this.warpRaise=0;this.warpSmile=0;
   }
-  scheduleExpression() {
-    if(this.expressionTimer!==null)clearTimeout(this.expressionTimer);
-    this.expressionTimer=null;
-    if(!this.expressionEnabled||!this.isVisible()||this.browPatches.length!==2)return;
-    this.expressionTimer=setTimeout(()=>{
-      this.expressionTimer=null;
-      const playing=!this.audio.paused&&!this.audio.ended&&!!this.audio.currentSrc;
-      if(!playing&&!this.browserSpeaking)return;
-      if(!document.hidden)this.triggerExpression();
-      this.scheduleExpression();
-    },3800+Math.random()*4600);
+  scheduleExpression() { /* Ora l'animazione è temporizzata nel ciclo voce. */ }
+  setupWarp() {
+    if(!this.warp||!this.expressionEnabled||!this.source||this.eyes.length!==2)return false;
+    const eyes=this.eyes.map(e=>({x:e.cx,y:e.cy}));
+    const brows=this.eyes.map((e,i)=>this.browAnchors[i]??{x:e.cx,y:e.cy-Math.max(10,e.height*2.55)});
+    let mouthCorners;
+    if(this.mouth){
+      mouthCorners=[
+        {x:this.mouth.cx-this.mouth.width*.5,y:(this.mouth.top+this.mouth.bottom)*.5},
+        {x:this.mouth.cx+this.mouth.width*.5,y:(this.mouth.top+this.mouth.bottom)*.5}
+      ];
+    }else{
+      const mid=(eyes[0].x+eyes[1].x)*.5;
+      const distance=Math.hypot(eyes[0].x-eyes[1].x,eyes[0].y-eyes[1].y);
+      const y=(eyes[0].y+eyes[1].y)*.5+distance*.65;
+      mouthCorners=[{x:mid-distance*.2,y},{x:mid+distance*.2,y}];
+    }
+    return this.warp.configure(this.source,eyes,brows,mouthCorners);
+  }
+  async prepareWarp() {
+    if(!this.expressionEnabled)return false;
+    if(!this.source||this.eyes.length!==2){
+      this.status('Per le espressioni WebGL carica una foto e indica entrambi gli occhi.');
+      return false;
+    }
+    if(this.warp?.ready)return true;
+    try{
+      if(!this.warpConstructor){
+        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=210');
+        const module=await this.warpModulePromise;
+        if(!this.expressionEnabled)return false;
+        this.warpConstructor=module.FaceWarp;
+        if(!this.warpConstructor)throw Error('Modulo WebGL non valido.');
+      }
+      if(!this.warp)this.warp=new this.warpConstructor();
+      const ok=this.setupWarp();
+      if(!ok){
+        this.status('Espressioni WebGL non disponibili: '+(this.warp.failed||'coordinate non pronte')+'. Gemini, labbra e palpebre restano utilizzabili.');
+        return false;
+      }
+      this.status('Espressioni WebGL 2.0 pronte: puoi provare sopracciglia e sorriso oppure parlare con Gemini.');
+      return true;
+    }catch(err){
+      this.warpModulePromise=null;
+      console.warn('VIVA AI WebGL disattivato, versione classica intatta:',err);
+      this.status('Non riesco a caricare le espressioni WebGL: '+(err?.message||err)+'. Gemini, labbra e palpebre continuano a funzionare.');
+      return false;
+    }
   }
   setExpressionEnabled(value) {
     this.expressionEnabled=Boolean(value);
     this.stopExpressions();
-    if(this.expressionEnabled){
-      if(this.browPatches.length!==2)this.setupBrows();
-      const playing=!this.audio.paused&&!this.audio.ended&&!!this.audio.currentSrc;
-      if(playing||this.browserSpeaking)this.scheduleExpression();
-    }
+    this.clearBrows();
+    if(this.expressionEnabled){void this.prepareWarp();}
+    else {this.draw(this.level,this.shape);this.status('Espressioni WebGL disattivate. Voce, labbra e palpebre rimangono attive.');}
     this.updateDisplay();
   }
-  testExpression() {
+  async testExpression() {
     if(!this.expressionEnabled){
-      this.status('Attiva la casella «Micro-espressioni», poi riprova.');return;
+      this.status('Attiva prima «Espressioni 2.0 · WebGL», poi premi di nuovo il pulsante.');
+      return;
     }
-    if(!this.isVisible()||this.eyes.length!==2){
-      this.status('Per le micro-espressioni carica una foto e indica prima entrambi gli occhi.');return;
+    if(!await this.prepareWarp())return;
+    this.expressionDemoStart=performance.now();
+    this.expressionDemoUntil=this.expressionDemoStart+3100;
+    this.status('TEST WebGL: prima le sopracciglia si alzano, poi compare un lieve sorriso.');
+    this.run();
+  }
+  updateWarpMotion(time,speaking,demonstrating) {
+    if(!this.expressionEnabled||!this.warp?.ready){this.warpRaise=0;this.warpSmile=0;return;}
+    const wave=(t,from,length)=>t>=from&&t<=from+length?Math.pow(Math.sin(Math.PI*(t-from)/length),1.15):0;
+    const strength=clamp(this.intensity/.75,.55,1.3);
+    if(demonstrating){
+      const t=(time-this.expressionDemoStart)/1000;
+      this.warpRaise=clamp(wave(t,.15,1.10)*.90*strength,0,1);
+      this.warpSmile=clamp(wave(t,1.50,1.15)*.75*strength,0,1);
+    }else if(speaking){
+      const t=Math.max(0,(time-this.voiceExpressionStart)/1000);
+      const phase=t%8.9;
+      // Micro-espressioni intermittentI, non un sorriso stampato sulla faccia.
+      this.warpRaise=clamp((wave(phase,.6,1.05)*.45+wave(phase,5.4,.92)*.32)*strength,0,.70);
+      this.warpSmile=clamp(wave(phase,3.1,1.8)*.26*strength,0,.40);
+      if(this.level>.32)this.warpSmile*=.30; // Evita che il sorriso alteri la sincronizzazione labiale.
+    }else{
+      this.warpRaise=0;this.warpSmile=0;
     }
-    if(this.triggerExpression())this.status('PROVA: sopracciglia leggermente sollevate, senza muovere la fotografia.');
-    else this.status('Non riesco a preparare le sopracciglia per questa foto. Prova un ritratto frontale.');
   }
   resetHeadPose(){
     for(const node of [this.canvas,this.lidLayer,this.browLayer]){
@@ -347,11 +365,10 @@ export class PhotoAvatarMotion {
   }
   updateHeadPose(time,active){
     if(!this.headEnabled||!active){this.resetHeadPose();return;}
-    // Il canvas, le palpebre e le sopracciglia ruotano insieme.
-    // Ampiezza minuscola, senza traslazione verticale.
+    // Il movimento è minuscolo e coordinato fra ritratto e palpebre.
     const degrees=Math.sin(time/1900)*.11;
     const pose='rotate('+degrees.toFixed(3)+'deg) scale(1.003)';
-    for(const node of [this.canvas,this.lidLayer,this.browLayer]){
+    for(const node of [this.canvas,this.lidLayer]){
       if(node?.style)node.style.transform=pose;
     }
   }
@@ -600,7 +617,7 @@ export class PhotoAvatarMotion {
   }
   setBrowserSpeaking(value) {
     this.browserSpeaking=Boolean(value);
-    if(value){this.browserStart=performance.now();this.scheduleExpression();this.run();}
+    if(value){this.browserStart=performance.now();this.voiceExpressionStart=this.browserStart;this.run();}
     else {this.stopExpressions();this.resetHeadPose();this.reset();}
   }
   armAudio() {
@@ -625,7 +642,7 @@ export class PhotoAvatarMotion {
   }
   async onAudioPlay(){
     if(!this.isVisible())return;
-    this.armAudio();this.scheduleExpression();this.run();
+    this.armAudio();this.voiceExpressionStart=performance.now();this.run();
   }
   onAudioStop(){
     if(!this.browserSpeaking){this.stopExpressions();this.resetHeadPose();}
@@ -638,6 +655,7 @@ export class PhotoAvatarMotion {
   reset(){
     if(this.frame)cancelAnimationFrame(this.frame);
     this.frame=0;this.level=0;this.shape=.48;
+    this.warpRaise=0;this.warpSmile=0;
     this.resetHeadPose();
     if(this.ready)this.draw(0,this.shape);
   }
@@ -647,8 +665,10 @@ export class PhotoAvatarMotion {
     const playing=!this.audio.paused && !this.audio.ended && !!this.audio.currentSrc;
     const demo=this.demoUntil>time;
     const blinking=this.blinkStart>=0;
-    if(!playing && !this.browserSpeaking && !demo && !blinking){this.reset();return;}
+    const demoExpression=this.expressionDemoUntil>time;
+    if(!playing && !this.browserSpeaking && !demo && !blinking && !demoExpression){this.reset();return;}
     this.updateHeadPose(time,playing||this.browserSpeaking);
+    this.updateWarpMotion(time,playing||this.browserSpeaking,demoExpression);
     let target=0;
     let shapeTarget=.48;
     if(demo) {
@@ -705,7 +725,11 @@ export class PhotoAvatarMotion {
     ctx.save();
     // Gli eventuali movimenti della testa sono applicati a tutti gli strati DOM
     // in updateHeadPose(), non solo al canvas.
-    ctx.drawImage(this.source,0,0);
+    let face=this.source;
+    if(this.expressionEnabled&&this.warp?.ready&&(this.warpRaise>.001||this.warpSmile>.001)){
+      face=this.warp.render(this.warpRaise,this.warpSmile)||this.source;
+    }
+    ctx.drawImage(face,0,0);
     if(!this.lidPatches.length)this.paintEyes(ctx,this.blinkAmount);
     const amount=m?clamp(openness*this.intensity,0,1):0;
     if(amount<.07||!m){ctx.restore();return;}
@@ -761,7 +785,7 @@ export class PhotoAvatarMotion {
     ctx.restore(); // trasformazione discreta del volto
   }
   dispose(){
-    ++this.seq;this.stopExpressions();this.resetHeadPose();this.reset();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();this.clearBrows();this.eyePending=false;this.eyeClicks=[];
+    ++this.seq;this.stopExpressions();this.resetHeadPose();this.reset();this.clearBlink();this.clearEyeDiagnosis();this.clearLids();this.clearBrows();this.warp?.dispose();this.warp=null;this.eyePending=false;this.eyeClicks=[];
     try{this.audioContext?.close();}catch{}
   }
 }
