@@ -654,7 +654,7 @@ async function retryGeminiVoiceNow(){
     state.voiceEngine='gemini';
     $('voice-engine').value='gemini';
     $('ai-voice-choice').disabled=state.voiceSource==='custom';
-    $('voice-choice').disabled=state.voiceSource==='custom'||true;
+    $('voice-choice').disabled=true;
     result.textContent='Voce Gemini disponibile! Riproduco la frase di prova. Da ora le prossime risposte useranno Gemini.';
     $('audio-state').textContent='◉ Voce Gemini ripristinata';
     await playAudioBlob(new Blob([bytes],{type:'audio/wav'}),job);
