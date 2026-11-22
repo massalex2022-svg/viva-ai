@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=230';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=240';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -16,6 +16,34 @@ const motion = new PhotoAvatarMotion({
   audio: $('generated-audio'),
   status: message => $('photo-motion-status').textContent=message
 });
+// Le regolazioni della fotografia rimangono sul Chromebook, non nel Worker.
+const MOTION_DEFAULTS={mouth:1.20,brow:35};
+const MOTION_STORAGE={mouth:'viva_motion_mouth_24',brow:'viva_motion_brow_24'};
+function readMotionValue(key,fallback,min,max){
+  try{
+    const raw=localStorage.getItem(key);
+    if(raw===null)return fallback;
+    const value=Number(raw);
+    return Number.isFinite(value)&&value>=min&&value<=max?value:fallback;
+  }catch{return fallback;}
+}
+function saveMotionValue(key,value){
+  try{localStorage.setItem(key,String(value));}catch{}
+}
+function applyMotionValues(mouth,brow,save=false){
+  const m=Math.max(.4,Math.min(2.4,Number(mouth)));
+  const b=Math.max(0,Math.min(150,Number(brow)));
+  $('motion-intensity').value=String(m);
+  $('motion-intensity-label').textContent=Math.round(m*100)+'%';
+  $('brow-intensity').value=String(b);
+  $('brow-intensity-label').textContent=Math.round(b)+'%';
+  motion.setIntensity(m);
+  motion.setBrowIntensity(b);
+  if(save){
+    saveMotionValue(MOTION_STORAGE.mouth,m);
+    saveMotionValue(MOTION_STORAGE.brow,b);
+  }
+}
 function status(message, error=false) {
   $('status-message').textContent = message;
   $('status-message').classList.toggle('error', error);
@@ -443,15 +471,19 @@ $('expression-test').addEventListener('click',()=>motion.testExpression());
 $('head-enabled').addEventListener('change',e=>motion.setHeadEnabled(e.target.checked));
 $('motion-pick').addEventListener('click',()=>motion.pickMouth());
 $('motion-intensity').addEventListener('input',e=>{
-  const value=Number(e.target.value);
-  motion.setIntensity(value);
-  $('motion-intensity-label').textContent=Math.round(value*100)+'%';
+  applyMotionValues(Number(e.target.value),Number($('brow-intensity').value),true);
 });
 $('brow-intensity').addEventListener('input',e=>{
-  const value=Number(e.target.value);
-  motion.setBrowIntensity(value);
-  $('brow-intensity-label').textContent=value+'%';
+  applyMotionValues(Number($('motion-intensity').value),Number(e.target.value),true);
 });
+$('motion-reset').addEventListener('click',()=>{
+  applyMotionValues(MOTION_DEFAULTS.mouth,MOTION_DEFAULTS.brow,true);
+  $('photo-motion-status').textContent='Regolazioni ripristinate: bocca 120%, sopracciglia 35%.';
+});
+applyMotionValues(
+  readMotionValue(MOTION_STORAGE.mouth,MOTION_DEFAULTS.mouth,.4,2.4),
+  readMotionValue(MOTION_STORAGE.brow,MOTION_DEFAULTS.brow,0,150)
+);
 $('avatar-name').addEventListener('input',updateName);
 $('mode-basic').addEventListener('click',()=>modeChange('basic'));
 $('mode-live').addEventListener('click',()=>modeChange('live'));
