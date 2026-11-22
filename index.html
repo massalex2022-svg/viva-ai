@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.20 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=2200">
+  <title>VIVA AI 2.21 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=2210">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.20</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.21</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -178,7 +178,8 @@
           <div class="handsfree-panel">
             <button id="handsfree-button" class="ghost" type="button" aria-pressed="false" disabled>🎙 Avvia ascolto continuo</button>
             <div id="handsfree-state" class="handsfree-state" role="status">Ascolto continuo spento · microfono soltanto su richiesta.</div>
-            <small>Attiva dopo «Avvia conversazione». Ascolta una domanda, attende che l’avatar finisca di rispondere e ascolta di nuovo. Premi 🎙 per interrompere la voce e parlare. Puoi fermare l’ascolto in qualsiasi momento. Chrome può richiedere il permesso microfono e usare servizi online per il riconoscimento vocale. L’ascolto si interrompe quando cambi scheda.</small>
+            <div id="handsfree-last-heard" class="handsfree-last-heard" aria-live="polite">Nessuna domanda vocale ancora riconosciuta.</div>
+            <small>Attiva dopo «Avvia conversazione». Ascolta la domanda, aspetta che Chrome chiuda il microfono, poi la invia a Gemini. Dopo la risposta si riattiva. Premi 🎙 per interrompere la voce e parlare. Puoi fermare l’ascolto in qualsiasi momento. Chrome può richiedere il permesso microfono e usare servizi online per il riconoscimento vocale. L’ascolto si interrompe quando cambi scheda.</small>
           </div>
           <div id="status-message" class="status-message" role="status">Configura Cloudflare nelle impostazioni per ottenere risposte AI.</div><form id="chat-form" class="composer"><button id="mic-button" type="button" aria-label="Parla al microfono" title="Premi e parla">🎙</button><input id="message-input" type="text" autocomplete="off" placeholder="Scrivi la tua domanda..." maxlength="2500"><button id="send-button" type="submit" aria-label="Invia messaggio">➤</button></form><p class="composer-help">🎙 Durante una risposta: interrompi e parla · Modalità continua: un clic per ascoltare automaticamente dopo ogni risposta</p></div>
       </section>
@@ -195,6 +196,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=2200"></script>
+  <script type="module" src="app.js?v=2210"></script>
 </body>
 </html>
