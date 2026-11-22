@@ -1,4 +1,5 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=240';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=250';
+import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -106,6 +107,7 @@ function uploadVoice(event) {
 function stopSpokenAudio() {
   state.speechJob++;
   motion.setBrowserSpeaking(false);
+  motion.clearSpeechTimeline();
   if('speechSynthesis' in window) speechSynthesis.cancel();
   const audio=$('generated-audio');
   audio.pause(); audio.removeAttribute('src'); audio.load(); audio.hidden=true;
@@ -261,6 +263,11 @@ function speakBrowser(text) {
 }
 async function playAudioBlob(blob,myJob) {
   if(myJob!==state.speechJob) return;
+  // Analisi locale, senza microfono o chiamate a servizi aggiuntivi.
+  // Se il WAV non è supportato, rimane la sincronizzazione live.
+  const timeline=await analyzeSpeechWav(blob);
+  if(myJob!==state.speechJob)return;
+  motion.setSpeechTimeline(timeline);
   state.playingUrl=URL.createObjectURL(blob);
   const audio=$('generated-audio');
   audio.src=state.playingUrl;audio.hidden=false;
