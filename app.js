@@ -129,7 +129,7 @@ function voiceSourceChange(next) {
   }
   $('voice-standard-panel').hidden=next!=='standard';
   $('voice-custom-panel').hidden=next!=='custom';
-  $('voice-choice').disabled=next==='custom' || state.voiceEngine==='gemini';
+  $('voice-choice').disabled=next==='custom' || (state.voiceEngine==='gemini'&&!ttsCooldownUntil());
   $('ai-voice-choice').disabled=next==='custom' || state.voiceEngine==='browser';
   status(next==='standard'
     ? 'Voce standard selezionata: gratuita, tramite il browser.'
@@ -293,7 +293,7 @@ function chooseVoice() {
 function voiceEngineChange(next) {
   if(state.active || state.busy) return status('Termina la conversazione prima di cambiare il motore vocale.',true);
   state.voiceEngine=next==='browser'?'browser':'gemini';
-  $('voice-choice').disabled=state.voiceSource==='custom'||state.voiceEngine==='gemini';
+  $('voice-choice').disabled=state.voiceSource==='custom'||(state.voiceEngine==='gemini'&&!ttsCooldownUntil());
   $('ai-voice-choice').disabled=state.voiceSource==='custom'||state.voiceEngine==='browser';
   status(state.voiceEngine==='gemini'?'Voce Gemini selezionata. Richiede un Worker aggiornato e quota gratuita disponibile.':'Voce Chrome selezionata. Puoi iniziare subito.');
 }
@@ -330,6 +330,7 @@ function formatTtsWait(until){
  return hours?hours+' h '+remaining+' min':minutes+' min';
 }
 function showTtsCooldown(until=ttsCooldownUntil()){
+ $('voice-choice').disabled=state.voiceSource==='custom'||(state.voiceEngine==='gemini'&&!until);
  const banner=$('tts-quota-status');
  if(!banner)return;
  banner.hidden=!until;
