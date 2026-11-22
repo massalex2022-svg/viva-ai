@@ -232,3 +232,10 @@
 
 /* VIVA AI 2.21 — conferma visibile della domanda effettivamente riconosciuta */
 .handsfree-last-heard{min-height:22px;padding:7px 9px;border-radius:9px;background:#0c1d30;border:1px solid #29405d;color:#dceeff;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+
+/* VIVA AI 2.22 — la voce Gemini deve poter essere avviata con un clic reale se Chrome blocca autoplay */
+.voice-playback-recovery{display:grid;gap:7px;margin-bottom:10px}
+.voice-playback-recovery #play-gemini-audio{width:100%;min-height:48px;text-align:center;white-space:normal;font-size:14px;font-weight:800}
+.voice-playback-recovery #play-gemini-audio[hidden]{display:none!important}
+.voice-playback-recovery #voice-playback-status{font-size:11px;line-height:1.5;color:#ffdbb6;overflow-wrap:anywhere}
+.voice-playback-recovery #voice-playback-status:empty{display:none}
