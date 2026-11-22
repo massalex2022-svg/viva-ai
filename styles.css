@@ -201,3 +201,8 @@
 .chat-header-actions #replay-voice{font-size:12px;padding:8px 10px;white-space:nowrap}
 .chat-header-actions #replay-voice[hidden]{display:none!important}
 @media(max-width:530px){.chat-header-actions #replay-voice{font-size:11px;padding:7px 9px}}
+
+/* VIVA AI 2.9 — verifica voce Chrome con risultato visibile */
+.chrome-voice-check{display:grid;gap:7px;margin:11px 0 3px}
+.chrome-voice-check button{justify-self:start;max-width:100%;white-space:normal;text-align:left}
+.chrome-voice-check #chrome-voice-diagnostic{line-height:1.55;overflow-wrap:anywhere}
