@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2110';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2120';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -389,6 +389,10 @@ function formatTtsWait(until){
  const hours=Math.floor(minutes/60),remaining=minutes%60;
  return hours?hours+' h '+remaining+' min':minutes+' min';
 }
+function clearTtsCooldown(){
+  try{localStorage.removeItem(TTS_COOLDOWN_KEY)}catch{}
+  showTtsCooldown(0);
+}
 function showTtsCooldown(until=ttsCooldownUntil()){
  $('voice-choice').disabled=state.voiceSource==='custom'||(state.voiceEngine==='gemini'&&!until);
  const banner=$('tts-quota-status');
@@ -614,6 +618,58 @@ async function playAudioBlob(blob,myJob) {
   audio.onplay=()=>$('audio-state').textContent='◉ Sta parlando';
   try { await audio.play(); }
   catch {status('Audio generato. Premi ▶ nel riproduttore sotto la chat per ascoltarlo.');}
+}
+async function retryGeminiVoiceNow(){
+  const result=$('gemini-tts-test-result');
+  const button=$('retry-gemini-tts');
+  if(button.disabled)return;
+  if(!state.worker||!state.token){
+    result.textContent='Per verificare Gemini, configura prima il Worker Cloudflare nelle impostazioni.';
+    openSettings();
+    return;
+  }
+  if(state.busy){
+    result.textContent='Attendi che Gemini termini la risposta in corso, poi riprova.';
+    return;
+  }
+  // L'utente ha richiesto esplicitamente un'unica verifica, anche durante
+  // il cooldown locale. Non modifica la quota effettiva sul server Google.
+  stopSpokenAudio();
+  const job=state.speechJob;
+  button.disabled=true;
+  result.textContent='Verifico la disponibilità della voce Gemini TTS con una breve frase…';
+  try{
+    const data=await api('/api/tts',{
+      text:'Ciao, sono di nuovo qui e pronto a parlare con te.',
+      voice:$('ai-voice-choice').value
+    });
+    if(job!==state.speechJob)return;
+    if(!data.audio||data.mimeType!=='audio/wav')
+      throw Error('Gemini non ha restituito un audio WAV valido.');
+    const raw=atob(data.audio);
+    const bytes=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+    // Conferma empirica: solo una generazione riuscita attesta quota disponibile.
+    clearTtsCooldown();
+    state.voiceEngine='gemini';
+    $('voice-engine').value='gemini';
+    $('ai-voice-choice').disabled=state.voiceSource==='custom';
+    $('voice-choice').disabled=state.voiceSource==='custom'||true;
+    result.textContent='Voce Gemini disponibile! Riproduco la frase di prova. Da ora le prossime risposte useranno Gemini.';
+    $('audio-state').textContent='◉ Voce Gemini ripristinata';
+    await playAudioBlob(new Blob([bytes],{type:'audio/wav'}),job);
+  }catch(err){
+    if(job!==state.speechJob)return;
+    const until=rememberTtsCooldown(err?.message||String(err));
+    if(until){
+      showTtsCooldown(until);
+      result.textContent='La quota Gemini TTS non è ancora disponibile. Nuovo tempo indicato dal servizio: circa '+formatTtsWait(until)+'. Continuerò con Chrome senza altre richieste automatiche.';
+    }else{
+      result.textContent='Verifica non riuscita: '+(err?.message||String(err))+'. La disponibilità della quota non è confermata.';
+    }
+  }finally{
+    button.disabled=false;
+  }
 }
 async function speak(text) {
   if(state.mode!=='basic') return;
@@ -847,6 +903,7 @@ $('voice-standard').addEventListener('click',()=>voiceSourceChange('standard'));
 $('voice-custom').addEventListener('click',()=>voiceSourceChange('custom'));
 $('voice-file').addEventListener('change',uploadVoice);
 $('voice-engine').addEventListener('change',(e)=>voiceEngineChange(e.target.value));
+$('retry-gemini-tts').addEventListener('click',()=>{void retryGeminiVoiceNow()});
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('eyes-pick').addEventListener('click',()=>motion.pickEyes());
