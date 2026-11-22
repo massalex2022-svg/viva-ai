@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b1223">
   <meta name="description" content="VIVA AI: crea il tuo avatar da una fotografia e conversaci in italiano.">
-  <title>VIVA AI 2.4 · Il tuo avatar intelligente</title>
-  <link rel="stylesheet" href="styles.css?v=240">
+  <title>VIVA AI 2.5 · Il tuo avatar intelligente</title>
+  <link rel="stylesheet" href="styles.css?v=250">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.4</small></div></div>
+      <div class="brand"><div class="brand-mark">V<span>·</span></div><div><b>VIVA<span> AI</span></b><small>IL TUO AVATAR INTELLIGENTE · VERSIONE 2.5</small></div></div>
       <div class="top-right"><a href="./viva2.html?v=201" title="Apri il laboratorio sperimentale gratuito VIVA AI 2.0" style="color:#91f3df;font-weight:800;font-size:13px;white-space:nowrap">🧪 VIVA AI 2.0 LAB</a><span class="chip"><span class="dot"></span><span id="connection-label">Non configurato</span></span><button class="ghost compact" id="settings-button" type="button" aria-controls="settings-panel">⚙ Impostazioni</button></div>
     </header>
     <main class="workspace">
@@ -96,14 +96,14 @@
           <p class="motion-settings-hint">Le regolazioni di bocca e sopracciglia vengono ricordate su questo browser. Le palpebre restano sempre ferme.</p>
           <div class="motion-buttons">
             <button class="ghost" type="button" id="expression-test">◉ Prova espressioni WebGL</button>
-            <button class="ghost" type="button" id="motion-test">▶ Prova parlato naturale</button>
+            <button class="ghost" type="button" id="motion-test">▶ Prova ritmo delle labbra</button>
                         <button class="ghost" type="button" id="eyes-pick">◎ Indica gli occhi sulla foto</button>
             <button class="ghost" type="button" id="motion-pick">◎ Indica la bocca sulla foto</button>
             <button class="ghost" type="button" id="motion-reset">↺ Ripristina regolazioni</button>
           </div>
         </div>
         <div class="mode-block"><span class="eyebrow">TIPO DI ESPERIENZA</span><div class="mode-tabs" role="group" aria-label="Modalità avatar"><button id="mode-basic" class="mode active" type="button" aria-pressed="true"><b>Voce AI + labbra 2D</b><small>Foto 2D · Gemini</small></button><button id="mode-live" class="mode" type="button" aria-pressed="false"><b>Video realistico</b><small>Labbra e viso · D-ID</small></button></div></div>
-        <div class="mode-info" id="mode-info">Gemini continua a parlare con labbra più reattive al volume e alle pause. Bocca e sopracciglia si regolano separatamente e le impostazioni vengono ricordate. Il battito delle palpebre resta disattivato.</div>
+        <div class="mode-info" id="mode-info">Con voce Gemini WAV, le labbra seguono una timeline ricavata dall’audio, rispettando pause e riprese. Le intensità di bocca e sopracciglia restano indipendenti. Il battito delle palpebre rimane disattivato.</div>
         <button class="primary" id="start-button" type="button">Avvia conversazione <span>↗</span></button>
         <button class="ghost danger" id="stop-button" type="button" hidden>Termina conversazione</button>
         <p class="fineprint">Carica solo foto e campioni vocali che puoi usare legittimamente. L’avatar è generato dall’AI e non rappresenta dichiarazioni autentiche della persona ritratta.</p>
@@ -128,6 +128,6 @@
       <p class="fineprint">Il codice è conservato solo per questa sessione. Gemini serve per le risposte e la voce AI, D-ID è opzionale e può costare. La voce personalizzata richiede un servizio Chatterbox da collegare al Worker; nessun audio viene inviato prima di selezionare questa modalità e fare una domanda.</p>
     </section>
   </div>
-  <script type="module" src="app.js?v=240"></script>
+  <script type="module" src="app.js?v=250"></script>
 </body>
 </html>
