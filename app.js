@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2160';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2170';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -222,7 +222,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'Anteprima gratuita: voce Gemini e labbra ricostruite dal contorno della tua fotografia, quando MediaPipe le rileva. Puoi confrontare il nuovo metodo con VIVA AI 2.15; occhi e inquadratura fermi.'
+    ? 'Anteprima gratuita: voce Gemini, labbra col contorno della fotografia e movimento più fluido nelle pause. Puoi disattivare la nuova fluidità e confrontarla con VIVA AI 2.16; occhi e testa immobili.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -911,6 +911,20 @@ $('retry-gemini-tts').addEventListener('click',()=>{void retryGeminiVoiceNow()})
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('eyes-pick').addEventListener('click',()=>motion.pickEyes());
+const FLUID_LIPS_KEY='viva_fluid_lips_217';
+try{
+  $('fluid-lips-enabled').checked=localStorage.getItem(FLUID_LIPS_KEY)!=='false';
+}catch{
+  $('fluid-lips-enabled').checked=true;
+}
+motion.setFluidLipEnabled($('fluid-lips-enabled').checked);
+$('fluid-lips-enabled').addEventListener('change',e=>{
+  motion.setFluidLipEnabled(e.target.checked);
+  try{localStorage.setItem(FLUID_LIPS_KEY,String(e.target.checked))}catch{}
+  $('photo-motion-status').textContent=e.target.checked
+    ?'Movimenti fluidi attivi: le labbra si raccordano tra le sillabe e si chiudono meglio nelle pause Gemini.'
+    :'Movimenti fluidi disattivati: ripristinati i tempi di movimento di VIVA AI 2.16.';
+});
 const REAL_LIP_CONTOUR_KEY='viva_lip_contour_216';
 try{
   $('lip-contour-enabled').checked=localStorage.getItem(REAL_LIP_CONTOUR_KEY)!=='false';
