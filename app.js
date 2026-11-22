@@ -1004,7 +1004,7 @@ function beginVoiceRecognition(auto=false){
     // Chrome può ritardare onend. Il timer è solo una rete di sicurezza
     // dopo stop(): non si avviano richieste duplicate.
     try{rec.stop()}catch{}
-    if(finalizeTimer===null)finalizeTimer=setTimeout(closeAndDispatch,1000);
+    if(!closed&&finalizeTimer===null)finalizeTimer=setTimeout(closeAndDispatch,1000);
   };
   rec.onerror=event=>{
     if(state.recognition!==rec||closed)return;
@@ -1097,6 +1097,7 @@ async function stop() {
   motion.updateDisplay();
   $('live-tag').hidden=true;
   state.active=false;
+  handsFreeUI();
   $('start-button').hidden=false; $('stop-button').hidden=true;
   $('audio-state').textContent='● Terminato';
   status('Conversazione terminata. Puoi cambiare voce o modalità e ricominciare.');
@@ -1245,6 +1246,7 @@ $('replay-voice').addEventListener('click',()=>{
 $('clear-chat').addEventListener('click',()=>{
   if (state.mode==='live'&&state.active) return status('Termina la videochiamata per azzerare la cronologia D-ID.',true);
   state.messages=[];state.lastAgentMessage='';state.lastSpokenText='';$('replay-voice').hidden=true;$('chat-scroll').innerHTML='';
+  $('handsfree-last-heard').textContent='Nessuna domanda vocale ancora riconosciuta.';
   addMessage('assistant','Conversazione azzerata. Di cosa vuoi parlare?');
   status('Cronologia ripulita.');
 });
