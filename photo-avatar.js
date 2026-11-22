@@ -1,4 +1,4 @@
-/* VIVA AI 2.3 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
+/* VIVA AI 2.4 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -40,6 +40,7 @@ export class PhotoAvatarMotion {
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
     this.shape=.48; this.intensity=1.20; this.browIntensity=.35; this.freq=null;
+    this.lastFrameTime=0;
     this.eyes=[];this.blinkEnabled=false;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
     // WebGL è opzionale: il modulo viene caricato solo attivando le espressioni 2.0.
@@ -252,7 +253,7 @@ export class PhotoAvatarMotion {
     if(!this.ready){this.status('Il volto non è pronto: premi «Indica la bocca sulla foto», clicca sulla bocca e riprova.');return;}
     this.demoStart=performance.now();
     this.demoUntil=this.demoStart+3200;
-    this.status('TEST: movimento più morbido, con aperture diverse e pause. Osserva soprattutto la naturalezza delle labbra.');
+    this.status('TEST PARLATO 2.4: apertura variabile delle labbra e pause più definite. Puoi regolare il cursore mentre guardi.');
     this.run();
   }
   prepareEyes(points,w,h) {
@@ -357,18 +358,20 @@ export class PhotoAvatarMotion {
   updateWarpMotion(time,speaking,demonstrating) {
     if(!this.expressionEnabled||!this.warp?.ready){this.warpRaise=0;this.warpSmile=0;return;}
     const wave=(t,from,length)=>t>=from&&t<=from+length?Math.pow(Math.sin(Math.PI*(t-from)/length),1.15):0;
-    const strength=clamp(this.browIntensity,0,1.5);
+    const browStrength=clamp(this.browIntensity,0,1.5);
     if(demonstrating){
       const t=(time-this.expressionDemoStart)/1000;
-      this.warpRaise=clamp(wave(t,.15,1.10)*.90*strength,0,1);
-      this.warpSmile=clamp(wave(t,1.50,1.15)*.75*strength,0,1);
+      this.warpRaise=clamp(wave(t,.15,1.10)*.90*browStrength,0,1);
+      this.warpSmile=clamp(wave(t,1.50,1.15)*.24,0,.32);
     }else if(speaking){
       const t=Math.max(0,(time-this.voiceExpressionStart)/1000);
-      const phase=t%8.9;
-      // Micro-espressioni intermittentI, non un sorriso stampato sulla faccia.
-      this.warpRaise=clamp((wave(phase,.6,1.05)*.45+wave(phase,5.4,.92)*.32)*strength,0,.70);
-      this.warpSmile=clamp(wave(phase,3.1,1.8)*.26*strength,0,.40);
-      if(this.level>.32)this.warpSmile*=.30; // Evita che il sorriso alteri la sincronizzazione labiale.
+      const phase=t%13.7;
+      // Accenti brevi e distanziati: sopracciglia meno meccaniche.
+      // Il cursore sopracciglia non modifica l'ampiezza del sorriso.
+      const emphasis=clamp((this.level-.05)*1.5,.22,1);
+      this.warpRaise=clamp((wave(phase,.8,1.20)*.48+wave(phase,5.35,.95)*.30+wave(phase,10.25,1.08)*.38)*browStrength*emphasis,0,.60);
+      this.warpSmile=clamp(wave(phase,7.1,1.65)*.17,0,.24);
+      if(this.level>.32)this.warpSmile*=.28; // Non interferire con il parlato.
     }else{
       this.warpRaise=0;this.warpSmile=0;
     }
@@ -601,7 +604,7 @@ export class PhotoAvatarMotion {
         const source=this.audioContext.createMediaElementSource(this.audio);
         this.analyser=this.audioContext.createAnalyser();
         this.analyser.fftSize=2048;
-        this.analyser.smoothingTimeConstant=.52;
+        this.analyser.smoothingTimeConstant=.34;
         source.connect(this.analyser);
         this.analyser.connect(this.audioContext.destination);
         this.samples=new Uint8Array(this.analyser.fftSize);
@@ -626,7 +629,7 @@ export class PhotoAvatarMotion {
   }
   reset(){
     if(this.frame)cancelAnimationFrame(this.frame);
-    this.frame=0;this.level=0;this.shape=.48;
+    this.frame=0;this.level=0;this.shape=.48;this.lastFrameTime=0;
     this.warpRaise=0;this.warpSmile=0;
     this.resetHeadPose();
     if(this.ready)this.draw(0,this.shape);
@@ -636,26 +639,31 @@ export class PhotoAvatarMotion {
     if(!this.isVisible())return;
     const playing=!this.audio.paused && !this.audio.ended && !!this.audio.currentSrc;
     const demo=this.demoUntil>time;
-    const blinking=false; // Nessuna chiusura degli occhi.
     const demoExpression=this.expressionDemoUntil>time;
-    if(!playing && !this.browserSpeaking && !demo && !blinking && !demoExpression){this.reset();return;}
+    if(!playing && !this.browserSpeaking && !demo && !demoExpression){this.reset();return;}
+    const dt=this.lastFrameTime?clamp(time-this.lastFrameTime,8,55):16.7;
+    this.lastFrameTime=time;
     this.updateHeadPose(time,playing||this.browserSpeaking);
     this.updateWarpMotion(time,playing||this.browserSpeaking,demoExpression);
     let target=0;
     let shapeTarget=.48;
     if(demo) {
       const t=(time-this.demoStart)/1000;
-      const syllables=Math.pow(Math.max(0,Math.sin(t*10.8)),.8);
-      target=clamp(.12+.8*syllables,0,1);
-      shapeTarget=clamp(.5+.28*Math.sin(t*3.5),.14,.86);
+      const syllables=Math.pow(Math.max(0,Math.sin(t*11.2+.6*Math.sin(t*2.1))),.82);
+      // Anche la prova include brevi silenzi, non una bocca sempre aperta.
+      const pause=(t>.8&&t<1.07)||(t>2.25&&t<2.56);
+      target=pause?0:clamp(.05+.83*syllables,0,1);
+      shapeTarget=clamp(.5+.23*Math.sin(t*3.5),.18,.83);
     } else if(playing && this.analyser && this.audioContext?.state==='running'){
       this.analyser.getByteTimeDomainData(this.samples);
       let sum=0;
       for(const x of this.samples){const d=(x-128)/128;sum+=d*d;}
       const rms=Math.sqrt(sum/this.samples.length);
-      // Noise gate e attacco/rilascio: la bocca si chiude nelle pause.
-      target=clamp((rms-.015)*12,0,1);
-      if(target<.07)target=0;
+      // L'apertura segue l'energia reale dell'audio, con maggior dettaglio
+      // sulle sillabe a volume più basso. La bocca si chiude nei silenzi.
+      const voiced=clamp((rms-.010)*19,0,1);
+      target=Math.pow(voiced,.82);
+      if(target<.075)target=0;
       if(this.freq){
         this.analyser.getByteFrequencyData(this.freq);
         const bins=this.freq.length;
@@ -667,15 +675,20 @@ export class PhotoAvatarMotion {
         // Forma indicativa da timbro/energia: non è riconoscimento dei fonemi.
         shapeTarget=clamp(.53+diff/210,.22,.79);
       }
-    } else if(this.browserSpeaking) {
-      // La voce Chrome non fornisce l'onda audio; animazione indicativa.
-      const t=(time-this.browserStart)/1000;
-      target=clamp(.32+.3*Math.sin(t*12)+.15*Math.sin(t*5.7),0,1);
-      shapeTarget=clamp(.5+.2*Math.sin(t*3.6),.22,.78);
+    } else if(this.browserSpeaking || playing) {
+      // Fallback solo quando il browser non fornisce campioni audio:
+      // movimento indicativo (non vera sincronizzazione fonetica).
+      const start=this.browserSpeaking?this.browserStart:this.voiceExpressionStart;
+      const t=Math.max(0,(time-start)/1000);
+      const pause=(t%4.8)>4.30||(t%7.2)>6.65;
+      const syllables=Math.pow(Math.max(0,Math.sin(t*11.8+.55*Math.sin(t*1.4))),.82);
+      target=pause?0:clamp(.08+.77*syllables,0,1);
+      shapeTarget=clamp(.50+.20*Math.sin(t*2.45+.35*Math.sin(t*3.1)),.2,.8);
     }
-    const smoothing=target>this.level?.31:.19;
+    // Attacco più veloce, rilascio graduale. Il tempo è indipendente dagli FPS.
+    const smoothing=1-Math.exp(-dt/(target>this.level?42:78));
     this.level+=(target-this.level)*smoothing;
-    this.shape+=(shapeTarget-this.shape)*.17;
+    this.shape+=(shapeTarget-this.shape)*(1-Math.exp(-dt/90));
     if(this.level<.035)this.level=0;
     this.draw(this.level,this.shape);
     this.frame=requestAnimationFrame(this.paint);
