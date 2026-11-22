@@ -82,3 +82,35 @@
  box-shadow:0 5px 25px #000a;letter-spacing:.35px;
 }
 .eye-diagnostic-marker{z-index:3;border-width:4px;border-color:#49ff88;background:#12452a60;box-shadow:0 0 0 3px #062d24,0 0 24px #5cff98a8}
+
+/* VIVA AI 1.4.6 — palpebre DOM sopra il ritratto, separate dal canvas */
+.photo-frame .eye-lid-layer{position:absolute;inset:0;z-index:10;pointer-events:none;overflow:hidden}
+.photo-frame .eye-lid-layer[hidden]{display:none!important}
+.eye-lid-patch{
+ position:absolute;transform:translate(-50%,-50%) rotate(var(--eye-tilt,0rad));
+ border-radius:48% 48% 44% 44% / 55% 55% 50% 50%;overflow:hidden;
+ pointer-events:none;will-change:transform;
+}
+.eye-lid-top,.eye-lid-bottom{
+ position:absolute;left:0;right:0;height:51%;opacity:1;
+ box-shadow:inset 0 0 4px #00000015;
+ transform:scaleY(0);will-change:transform;
+}
+.eye-lid-top{top:0;transform-origin:top center;border-radius:45% 45% 12% 12%}
+.eye-lid-bottom{bottom:0;transform-origin:bottom center;border-radius:12% 12% 45% 45%}
+.eye-lid-seam{
+ position:absolute;left:7%;right:7%;top:49%;height:1px;
+ background:#402c2c88;opacity:0;z-index:2;
+ border-radius:100%;pointer-events:none;
+}
+.eye-lid-patch.blink-now .eye-lid-top{animation:viva-lid-close var(--blink-duration,245ms) ease-in-out 1 both}
+.eye-lid-patch.blink-now .eye-lid-bottom{animation:viva-lid-close var(--blink-duration,245ms) ease-in-out 1 both}
+.eye-lid-patch.blink-now .eye-lid-seam{animation:viva-lid-seam var(--blink-duration,245ms) ease-in-out 1 both}
+@keyframes viva-lid-close{
+ 0%,100%{transform:scaleY(0)}
+ 36%,61%{transform:scaleY(1)}
+}
+@keyframes viva-lid-seam{
+ 0%,31%,66%,100%{opacity:0}
+ 42%,58%{opacity:.65}
+}
