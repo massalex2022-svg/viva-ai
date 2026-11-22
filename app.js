@@ -1010,6 +1010,19 @@ function toggleHandsFree(){
 function microphone(){
   if(!state.active)return status('Avvia prima la conversazione.',true);
   if(state.busy)return;
+  // Priorità all'interruzione della risposta, anche se Chrome deve ancora
+  // notificare la fine della precedente sessione di riconoscimento.
+  if(state.voiceCycleActive){
+    if(state.recognition){
+      const rec=state.recognition;state.recognition=null;
+      try{rec.stop()}catch{}
+    }
+    stopSpokenAudio();
+    state.voiceCycleActive=false;
+    handsFreeUI();
+    beginVoiceRecognition(false);
+    return;
+  }
   if(state.recognition){
     if(state.handsFree)stopHandsFree('Ascolto continuo disattivato.');
     else{try{state.recognition.stop()}catch{}}
