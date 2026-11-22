@@ -1,4 +1,4 @@
-/* VIVA AI 2.5 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
+/* VIVA AI 2.13 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -44,7 +44,7 @@ export class PhotoAvatarMotion {
     this.eyes=[];this.blinkEnabled=false;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
     // WebGL è opzionale: il modulo viene caricato solo attivando le espressioni 2.0.
-    this.warp=null;this.warpConstructor=null;this.warpModulePromise=null;this.warpRaise=0;this.warpSmile=0;
+    this.warp=null;this.warpConstructor=null;this.warpModulePromise=null;this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
     this.expressionDemoStart=0;this.expressionDemoUntil=0;this.voiceExpressionStart=0;
     this.blinkStart=-1;this.blinkTimer=null;this.blinkAmount=0;this.blinkDuration=245;
     this.browserSpeaking=false; this.browserStart=0;
@@ -313,7 +313,7 @@ export class PhotoAvatarMotion {
     if(this.warp?.ready)return true;
     try{
       if(!this.warpConstructor){
-        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=220');
+        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=2130');
         const module=await this.warpModulePromise;
         if(!this.expressionEnabled)return false;
         this.warpConstructor=module.FaceWarp;
@@ -327,7 +327,7 @@ export class PhotoAvatarMotion {
       }
       this.updateDisplay();
       if(this.ready)this.draw(this.level,this.shape);
-      this.status('Espressioni WebGL 2.2 pronte: occhi, sopracciglia e sorriso sono deformati nella foto.');
+      this.status('Espressioni WebGL pronte: sopracciglia, sorriso e mandibola, senza animare gli occhi.');
       return true;
     }catch(err){
       this.warpModulePromise=null;
@@ -351,18 +351,19 @@ export class PhotoAvatarMotion {
     }
     if(!await this.prepareWarp())return;
     this.expressionDemoStart=performance.now();
-    this.expressionDemoUntil=this.expressionDemoStart+3100;
-    this.status('TEST WebGL: prima si alzano le sopracciglia, poi compare un lieve sorriso. Le intensità sono ora separate.');
+    this.expressionDemoUntil=this.expressionDemoStart+4150;
+    this.status('TEST VOLTO: prima sopracciglia, poi lieve sorriso, infine una piccola apertura della mandibola. Gli occhi restano immobili.');
     this.run();
   }
   updateWarpMotion(time,speaking,demonstrating) {
-    if(!this.expressionEnabled||!this.warp?.ready){this.warpRaise=0;this.warpSmile=0;return;}
+    if(!this.expressionEnabled||!this.warp?.ready){this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;return;}
     const wave=(t,from,length)=>t>=from&&t<=from+length?Math.pow(Math.sin(Math.PI*(t-from)/length),1.15):0;
     const browStrength=clamp(this.browIntensity,0,1.5);
     if(demonstrating){
       const t=(time-this.expressionDemoStart)/1000;
       this.warpRaise=clamp(wave(t,.15,1.10)*.90*browStrength,0,1);
       this.warpSmile=clamp(wave(t,1.50,1.15)*.24,0,.32);
+      this.warpJaw=clamp(wave(t,2.82,.98)*.66,0,.66);
     }else if(speaking){
       const t=Math.max(0,(time-this.voiceExpressionStart)/1000);
       const phase=t%13.7;
@@ -373,7 +374,7 @@ export class PhotoAvatarMotion {
       this.warpSmile=clamp(wave(phase,7.1,1.65)*.17,0,.24);
       if(this.level>.32)this.warpSmile*=.28; // Non interferire con il parlato.
     }else{
-      this.warpRaise=0;this.warpSmile=0;
+      this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
     }
   }
   resetHeadPose(){
@@ -652,7 +653,7 @@ export class PhotoAvatarMotion {
   reset(){
     if(this.frame)cancelAnimationFrame(this.frame);
     this.frame=0;this.level=0;this.shape=.48;this.lastFrameTime=0;
-    this.warpRaise=0;this.warpSmile=0;
+    this.warpRaise=0;this.warpSmile=0;this.warpJaw=0;
     this.resetHeadPose();
     if(this.ready)this.draw(0,this.shape);
   }
@@ -720,6 +721,11 @@ export class PhotoAvatarMotion {
     this.level+=(target-this.level)*smoothing;
     this.shape+=(shapeTarget-this.shape)*(1-Math.exp(-dt/90));
     if(this.level<.035)this.level=0;
+    // La mandibola segue la stessa timeline del parlato.
+    // Naso, occhi, palpebre e inquadratura rimangono invariati.
+    if(this.expressionEnabled&&this.warp?.ready&&!demoExpression){
+      this.warpJaw=clamp(this.level*this.intensity,0,1)*.66;
+    }
     this.draw(this.level,this.shape);
     this.frame=requestAnimationFrame(this.paint);
   }
@@ -731,8 +737,8 @@ export class PhotoAvatarMotion {
     // Gli eventuali movimenti della testa sono applicati a tutti gli strati DOM
     // in updateHeadPose(), non solo al canvas.
     let face=this.source;
-    if(this.expressionEnabled&&this.warp?.ready&&(this.warpRaise>.001||this.warpSmile>.001)){
-      face=this.warp.render(this.warpRaise,this.warpSmile)||this.source;
+    if(this.expressionEnabled&&this.warp?.ready&&(this.warpRaise>.001||this.warpSmile>.001||this.warpJaw>.001)){
+      face=this.warp.render(this.warpRaise,this.warpSmile,this.warpJaw)||this.source;
     }
     ctx.drawImage(face,0,0);
     // La fotografia degli occhi resta sempre originale; nessuna palpebra viene disegnata.
