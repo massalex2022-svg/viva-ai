@@ -1,4 +1,4 @@
-/* VIVA AI 2.1 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 2.2 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -39,7 +39,7 @@ export class PhotoAvatarMotion {
     this.ctx=canvas.getContext('2d', {alpha:false});
     this.enabled=true; this.mode='basic'; this.ready=false; this.mouth=null;
     this.source=null; this.frame=0; this.seq=0; this.level=0;
-    this.shape=.48; this.intensity=.75; this.freq=null;
+    this.shape=.48; this.intensity=1.20; this.browIntensity=.35; this.freq=null;
     this.eyes=[];this.blinkEnabled=true;this.headEnabled=false;
     this.expressionEnabled=false;this.browAnchors=[];this.browPatches=[];this.expressionTimer=null;
     // WebGL è opzionale: il modulo viene caricato solo attivando le espressioni 2.0.
@@ -68,12 +68,15 @@ export class PhotoAvatarMotion {
     });
   }
   isVisible() { return this.enabled && this.mode==='basic' && !!this.source && (!!this.mouth || this.eyes.length>0); }
+  useWarpBlink() {
+    return !!(this.expressionEnabled && this.warp?.ready && this.blinkEnabled && this.eyes.length===2);
+  }
   updateDisplay() {
     const editing=this.manualPending||this.eyePending;
     const showingCanvas=this.isVisible()&&!editing;
     this.canvas.hidden=!showingCanvas;
     if(this.photo.src && this.mode==='basic')this.photo.hidden=showingCanvas;
-    if(this.lidLayer)this.lidLayer.hidden=!showingCanvas || !this.blinkEnabled || this.eyes.length!==2;
+    if(this.lidLayer)this.lidLayer.hidden=!showingCanvas || !this.blinkEnabled || this.eyes.length!==2 || this.useWarpBlink();
     if(this.browLayer)this.browLayer.hidden=true; // Vecchie patch CSS disattivate: deformazione WebGL sul canvas.
     const selecting=editing&&this.mode==='basic'&&this.enabled&&!!this.photo.src;
     this.selectLayer.hidden=!selecting;
@@ -286,7 +289,7 @@ export class PhotoAvatarMotion {
   scheduleExpression() { /* Ora l'animazione è temporizzata nel ciclo voce. */ }
   setupWarp() {
     if(!this.warp||!this.expressionEnabled||!this.source||this.eyes.length!==2)return false;
-    const eyes=this.eyes.map(e=>({x:e.cx,y:e.cy}));
+    const eyes=this.eyes.map(e=>({x:e.cx,y:e.cy,width:e.width,height:e.height}));
     const brows=this.eyes.map((e,i)=>this.browAnchors[i]??{x:e.cx,y:e.cy-Math.max(10,e.height*2.55)});
     let mouthCorners;
     if(this.mouth){
@@ -311,7 +314,7 @@ export class PhotoAvatarMotion {
     if(this.warp?.ready)return true;
     try{
       if(!this.warpConstructor){
-        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=210');
+        if(!this.warpModulePromise)this.warpModulePromise=import('./face-warp.js?v=220');
         const module=await this.warpModulePromise;
         if(!this.expressionEnabled)return false;
         this.warpConstructor=module.FaceWarp;
@@ -323,7 +326,9 @@ export class PhotoAvatarMotion {
         this.status('Espressioni WebGL non disponibili: '+(this.warp.failed||'coordinate non pronte')+'. Gemini, labbra e palpebre restano utilizzabili.');
         return false;
       }
-      this.status('Espressioni WebGL 2.0 pronte: puoi provare sopracciglia e sorriso oppure parlare con Gemini.');
+      this.updateDisplay();
+      if(this.ready)this.draw(this.level,this.shape);
+      this.status('Espressioni WebGL 2.2 pronte: occhi, sopracciglia e sorriso sono deformati nella foto.');
       return true;
     }catch(err){
       this.warpModulePromise=null;
@@ -337,7 +342,7 @@ export class PhotoAvatarMotion {
     this.stopExpressions();
     this.clearBrows();
     if(this.expressionEnabled){void this.prepareWarp();}
-    else {this.draw(this.level,this.shape);this.status('Espressioni WebGL disattivate. Voce, labbra e palpebre rimangono attive.');}
+    else {this.draw(this.level,this.shape);this.status('WebGL disattivato. Ripristinate le palpebre classiche; voce e labbra restano attive.');}
     this.updateDisplay();
   }
   async testExpression() {
@@ -348,13 +353,13 @@ export class PhotoAvatarMotion {
     if(!await this.prepareWarp())return;
     this.expressionDemoStart=performance.now();
     this.expressionDemoUntil=this.expressionDemoStart+3100;
-    this.status('TEST WebGL: prima le sopracciglia si alzano, poi compare un lieve sorriso.');
+    this.status('TEST WebGL: prima si alzano le sopracciglia, poi compare un lieve sorriso. Le intensità sono ora separate.');
     this.run();
   }
   updateWarpMotion(time,speaking,demonstrating) {
     if(!this.expressionEnabled||!this.warp?.ready){this.warpRaise=0;this.warpSmile=0;return;}
     const wave=(t,from,length)=>t>=from&&t<=from+length?Math.pow(Math.sin(Math.PI*(t-from)/length),1.15):0;
-    const strength=clamp(this.intensity/.75,.55,1.3);
+    const strength=clamp(this.browIntensity,0,1.5);
     if(demonstrating){
       const t=(time-this.expressionDemoStart)/1000;
       this.warpRaise=clamp(wave(t,.15,1.10)*.90*strength,0,1);
@@ -489,7 +494,10 @@ export class PhotoAvatarMotion {
   startBlink(duration=245) {
     if(!this.isVisible()||!this.blinkEnabled||!this.eyes.length)return false;
     this.blinkDuration=duration;
-    this.playLidBlink(duration);
+    if(this.useWarpBlink()){
+      if(this.lidLayer)this.lidLayer.hidden=true;
+      for(const patch of this.lidPatches)patch.classList.remove('blink-now');
+    } else this.playLidBlink(duration);
     this.blinkStart=performance.now();
     this.blinkAmount=0;
     this.run();
@@ -552,11 +560,15 @@ export class PhotoAvatarMotion {
     if(!this.isVisible()){
       this.status('Animazione non pronta. Verifica che sia attiva la modalità «Voce AI + labbra 2D».');return;
     }
-    this.setupLids();
-    if(this.lidPatches.length!==2){
-      this.status('Non riesco a mostrare le palpebre sulla foto. Inviami uno screenshot.');return;
+    if(!this.useWarpBlink()){
+      this.setupLids();
+      if(this.lidPatches.length!==2){
+        this.status('Non riesco a mostrare le palpebre sulla foto. Inviami uno screenshot.');return;
+      }
     }
-    this.status('PROVA PALPEBRE: primo battito controllato, secondo più veloce e naturale. Osserva la pelle intorno agli occhi.');
+    this.status(this.useWarpBlink()
+      ? 'TEST OCCHI WebGL: chiusura creata deformando i pixel della foto, senza vecchie palpebre sovrapposte.'
+      : 'TEST PALPEBRE CLASSICHE: per vedere la chiusura WebGL attiva prima «Espressioni 2.0 · WebGL».');
     if(this.blinkTestTimer!==null)clearTimeout(this.blinkTestTimer);
     if(this.blinkTimer!==null)clearTimeout(this.blinkTimer);
     this.blinkTestTimer=null;this.blinkTimer=null;
@@ -568,7 +580,7 @@ export class PhotoAvatarMotion {
   setBlinkEnabled(value) {
     this.blinkEnabled=Boolean(value);
     this.clearBlink();
-    if(this.lidLayer)this.lidLayer.hidden=!this.isVisible()||!this.blinkEnabled;
+    if(this.lidLayer)this.lidLayer.hidden=!this.isVisible()||!this.blinkEnabled||this.useWarpBlink();
     if(this.blinkEnabled)this.scheduleBlink();
     if(this.ready)this.draw(this.level,this.shape);
   }
@@ -612,7 +624,11 @@ export class PhotoAvatarMotion {
     }
   }
   setIntensity(value) {
-    this.intensity=clamp(Number(value)||.75,.35,1.25);
+    this.intensity=clamp(Number(value)||1.2,.4,2.4);
+    if(this.ready&&!this.frame)this.draw(this.level,this.shape);
+  }
+  setBrowIntensity(value) {
+    this.browIntensity=clamp(Number(value)/100,0,1.5);
     if(this.ready&&!this.frame)this.draw(this.level,this.shape);
   }
   setMode(mode) {
@@ -738,11 +754,12 @@ export class PhotoAvatarMotion {
     // Gli eventuali movimenti della testa sono applicati a tutti gli strati DOM
     // in updateHeadPose(), non solo al canvas.
     let face=this.source;
-    if(this.expressionEnabled&&this.warp?.ready&&(this.warpRaise>.001||this.warpSmile>.001)){
-      face=this.warp.render(this.warpRaise,this.warpSmile)||this.source;
+    const gpuBlink=this.useWarpBlink()?this.blinkAmount:0;
+    if(this.expressionEnabled&&this.warp?.ready&&(this.warpRaise>.001||this.warpSmile>.001||gpuBlink>.001)){
+      face=this.warp.render(this.warpRaise,this.warpSmile,gpuBlink)||this.source;
     }
     ctx.drawImage(face,0,0);
-    if(!this.lidPatches.length)this.paintEyes(ctx,this.blinkAmount);
+    if(!this.lidPatches.length&&!this.useWarpBlink())this.paintEyes(ctx,this.blinkAmount);
     const amount=m?clamp(openness*this.intensity,0,1):0;
     if(amount<.07||!m){ctx.restore();return;}
 
@@ -751,10 +768,10 @@ export class PhotoAvatarMotion {
     const middle=(m.top+m.bottom)*.5;
     const span=width*clamp(.75+(shape-.5)*.32,.66,.84);
     const radiusX=span*.5;
-    const opening=width*(.015+.105*amount)*amount;
-    const halfHeight=Math.max(.7,Math.min(width*.115,Math.max((m.bottom-m.top)*.5,0)+opening*.65));
+    const opening=width*(.014+.15*amount)*amount;
+    const halfHeight=Math.max(.7,Math.min(width*.20,Math.max((m.bottom-m.top)*.5,0)+opening*.85));
     const cxLeft=x-radiusX,cxRight=x+radiusX;
-    const lowerShift=clamp(opening*.46,0,width*.053);
+    const lowerShift=clamp(opening*.48,0,width*.065);
 
     // Muovi lievemente il labbro inferiore usando texture dalla stessa fotografia.
     // La maschera arrotondata evita una cucitura rettangolare visibile.
