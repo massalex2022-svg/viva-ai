@@ -349,7 +349,7 @@ function showTtsCooldown(until=ttsCooldownUntil()){
 }
 function speakBrowser(text,{direct=false}={}){
   if(!('speechSynthesis' in window))throw Error('Sintesi vocale Chrome non disponibile.');
-  const clean=String(text||'').replace(/\\*\\*/g,'').trim();
+  const clean=String(text||'').replace(/\*\*/g,'').trim();
   if(!clean)return;
   const job=state.speechJob;
   state.lastSpokenText=clean;
