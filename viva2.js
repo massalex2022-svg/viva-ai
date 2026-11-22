@@ -159,8 +159,9 @@ async function loadPhoto(file){
   if(turn!==session)return;
   if(!graphics)graphics=startGraphics();
   const {gl,tex}=graphics;
-  const w=Math.min(1100,img.naturalWidth);
-  const h=Math.max(1,Math.round(img.naturalHeight*w/img.naturalWidth));
+  const ratio=Math.min(1,1100/img.naturalWidth,1100/img.naturalHeight);
+  const w=Math.max(1,Math.round(img.naturalWidth*ratio));
+  const h=Math.max(1,Math.round(img.naturalHeight*ratio));
   canvas.width=w;canvas.height=h;
   gl.viewport(0,0,w,h);
   const source=document.createElement('canvas');
