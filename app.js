@@ -746,7 +746,7 @@ async function retryGeminiVoiceNow(){
     const until=rememberTtsCooldown(err?.message||String(err));
     if(until){
       showTtsCooldown(until);
-      result.textContent='La quota Gemini TTS non è ancora disponibile. Nuovo tempo indicato dal servizio: circa '+formatTtsWait(until)+'. Continuerò con Chrome senza altre richieste automatiche.';
+      result.textContent='La quota Gemini TTS non è ancora disponibile. Tempo indicato dal servizio: circa '+formatTtsWait(until)+'. Le risposte scritte continuano a funzionare; nessun fallback automatico a Chrome.';
     }else{
       result.textContent='Verifica non riuscita: '+(err?.message||String(err))+'. La disponibilità della quota non è confermata.';
     }
@@ -1296,6 +1296,23 @@ $('chrome-voice-choice').addEventListener('change',()=>{
     '. Premi «Prova voce selezionata» per ascoltarla.';
 });
 $('test-chrome-voice').addEventListener('click',testChromeVoice);
+$('retry-last-gemini').addEventListener('click',()=>{
+  if(state.mode!=='basic'||!state.active||!state.lastSpokenText)
+    return status('Non c’è una risposta da leggere con Gemini.',true);
+  if(state.busy)return status('Attendi che la risposta testuale sia pronta.',true);
+  if(state.voiceSource!=='standard')return status('Seleziona prima una voce standard Gemini.',true);
+  state.voiceEngine='gemini';
+  $('voice-engine').value='gemini';
+  $('retry-last-gemini').disabled=true;
+  const answer=state.lastSpokenText;
+  // Una sola nuova richiesta TTS, espressamente avviata dall'utente.
+  // Nessuna chiamata aggiuntiva alla chat e nessun ripiego su Chrome.
+  void speak(answer,{forceGemini:true}).catch(err=>{
+    showGeminiVoiceIssue(err);
+  }).finally(()=>{
+    $('retry-last-gemini').disabled=false;
+  });
+});
 $('play-gemini-audio').addEventListener('click',()=>{
   const audio=$('generated-audio');
   if(state.mode!=='basic'||!state.active||!state.playingUrl||!audio.src)
@@ -1315,7 +1332,25 @@ $('play-gemini-audio').addEventListener('click',()=>{
 });
 $('replay-voice').addEventListener('click',()=>{
   if(!state.lastSpokenText)return status('Non c’è ancora una risposta da riascoltare.');
-  if(state.mode!=='basic')return status('Il riascolto Chrome è disponibile nella modalità fotografica.');
+  if(state.mode!=='basic')return status('Riascolto disponibile nella modalità fotografica.');
+  if(state.voiceSource==='standard'&&state.voiceEngine==='gemini'){
+    const audio=$('generated-audio');
+    if(state.playingUrl&&audio.src){
+      try{
+        audio.currentTime=0;
+        motion.armAudio();
+        const result=audio.play();
+        if(result?.catch)void result.catch(err=>{
+          showGeminiPlaybackRecovery('Chrome ha bloccato il WAV: '+(err?.name||'errore')+'. Premi «Ascolta risposta Gemini».');
+        });
+      }catch(err){
+        showGeminiPlaybackRecovery('Riproduzione Gemini non riuscita: '+(err?.message||'errore')+'.');
+      }
+      return;
+    }
+    $('retry-last-gemini').click();
+    return;
+  }
   const answer=state.lastSpokenText;
   stopSpokenAudio();
   try{speakBrowser(answer,{direct:true});}
