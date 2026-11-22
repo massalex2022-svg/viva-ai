@@ -661,8 +661,8 @@ export class PhotoAvatarMotion {
       const rms=Math.sqrt(sum/this.samples.length);
       // L'apertura segue l'energia reale dell'audio, con maggior dettaglio
       // sulle sillabe a volume più basso. La bocca si chiude nei silenzi.
-      const voiced=clamp((rms-.010)*19,0,1);
-      target=Math.pow(voiced,.82);
+      const voiced=clamp((rms-.010)*12.5,0,1);
+      target=Math.pow(voiced,.90);
       if(target<.075)target=0;
       if(this.freq){
         this.analyser.getByteFrequencyData(this.freq);
