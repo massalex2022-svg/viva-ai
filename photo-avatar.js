@@ -1,4 +1,4 @@
-/* VIVA AI 2.3 — anteprima labbra, palpebre e micro-movimenti su fotografia, elaborazione nel browser.
+/* VIVA AI 2.3 — anteprima labbra e micro-espressioni su fotografia, elaborazione nel browser.
    MediaPipe rileva punti del volto, poi Web Audio guida un'apertura 2D approssimata della bocca.
    Nessuna foto viene caricata su un server per l'animazione. Non è un video AI fotorealistico. */
 const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -142,8 +142,8 @@ export class PhotoAvatarMotion {
       this.level=0; this.draw(0); this.updateDisplay();
       this.scheduleBlink();
       this.status(this.eyes.length===2
-        ? 'Bocca e occhi riconosciuti. Prova «Battito di palpebre» o avvia Gemini.'
-        : 'Bocca riconosciuta; occhi non rilevati con sufficiente precisione. Usa una fotografia frontale per i battiti.');
+        ? 'Bocca e occhi riconosciuti. Attiva «Espressioni WebGL» oppure avvia Gemini.'
+        : 'Bocca riconosciuta. Se vuoi usare le sopracciglia WebGL, prova una fotografia frontale con gli occhi visibili.');
     } catch (e) {
       if(seq!==this.seq)return;
       this.ready=false;this.updateDisplay();
@@ -193,8 +193,8 @@ export class PhotoAvatarMotion {
     this.draw(0);this.updateDisplay();
     if(this.eyes.length)this.scheduleBlink();
     this.status(this.eyes.length===2
-      ?'Bocca e occhi impostati. Premi «Prova battito palpebre».'
-      :'Bocca impostata. Per i battiti premi «Indica gli occhi» e clicca su entrambi.');
+      ?'Bocca e occhi impostati. Puoi provare le espressioni WebGL o parlare con Gemini.'
+      :'Bocca impostata. Se vuoi attivare le espressioni WebGL, usa «Indica gli occhi».');
   }
   pickEyes() {
     if(!this.enabled){this.status('Attiva «Anima le labbra» prima.');return;}
@@ -245,7 +245,7 @@ export class PhotoAvatarMotion {
     if(this.expressionEnabled)void this.prepareWarp();
     this.updateDisplay();
     this.draw(this.level,this.shape);this.scheduleBlink();
-    this.status('Occhi posizionati! Premi «Prova battito palpebre»: ora funziona anche senza selezionare la bocca.');
+    this.status('Occhi posizionati per il riconoscimento delle sopracciglia. Puoi attivare le espressioni WebGL.');
   }
   testMotion() {
     if(!this.enabled){this.status('Attiva prima «Anima le labbra».');return;}
@@ -321,7 +321,7 @@ export class PhotoAvatarMotion {
       if(!this.warp)this.warp=new this.warpConstructor();
       const ok=this.setupWarp();
       if(!ok){
-        this.status('Espressioni WebGL non disponibili: '+(this.warp.failed||'coordinate non pronte')+'. Gemini, labbra e palpebre restano utilizzabili.');
+        this.status('Espressioni WebGL non disponibili: '+(this.warp.failed||'coordinate non pronte')+'. Gemini e labbra restano utilizzabili.');
         return false;
       }
       this.updateDisplay();
@@ -331,7 +331,7 @@ export class PhotoAvatarMotion {
     }catch(err){
       this.warpModulePromise=null;
       console.warn('VIVA AI WebGL disattivato, versione classica intatta:',err);
-      this.status('Non riesco a caricare le espressioni WebGL: '+(err?.message||err)+'. Gemini, labbra e palpebre continuano a funzionare.');
+      this.status('Non riesco a caricare le espressioni WebGL: '+(err?.message||err)+'. Gemini e labbra continuano a funzionare.');
       return false;
     }
   }
@@ -340,7 +340,7 @@ export class PhotoAvatarMotion {
     this.stopExpressions();
     this.clearBrows();
     if(this.expressionEnabled){void this.prepareWarp();}
-    else {this.draw(this.level,this.shape);this.status('WebGL disattivato. Ripristinate le palpebre classiche; voce e labbra restano attive.');}
+    else {this.draw(this.level,this.shape);this.status('WebGL disattivato. Voce e labbra rimangono attive; gli occhi restano immobili.');}
     this.updateDisplay();
   }
   async testExpression() {
