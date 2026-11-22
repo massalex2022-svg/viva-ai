@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=2170';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=2180';
 import { analyzeSpeechWav } from './lip-sync.js?v=250';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
@@ -222,7 +222,7 @@ function modeChange(next) {
     $(el).setAttribute('aria-pressed', String(type===next));
   }
   $('mode-info').textContent = next==='basic'
-    ? 'Anteprima gratuita: voce Gemini, labbra col contorno della fotografia e movimento più fluido nelle pause. Puoi disattivare la nuova fluidità e confrontarla con VIVA AI 2.16; occhi e testa immobili.'
+    ? 'Anteprima gratuita: voce Gemini, labbra con contorni ricavati dalla foto e bordi delicatamente sfumati. Puoi tornare al disegno 2.17 con un interruttore; gli occhi e la testa restano fermi.'
     : 'D-ID genera il video parlante da una foto (Talk V2) e sincronizza labbra e voce. Per espressioni ancora più naturali servirà integrare V4 Instant. Sono necessari crediti D-ID.';
   $('start-button').innerHTML = next==='basic' ? 'Avvia conversazione <span>↗</span>' : 'Crea avatar e avvia video <span>↗</span>';
 }
@@ -911,6 +911,20 @@ $('retry-gemini-tts').addEventListener('click',()=>{void retryGeminiVoiceNow()})
 $('photo-motion-enabled').addEventListener('change',e=>motion.setEnabled(e.target.checked));
 $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('eyes-pick').addEventListener('click',()=>motion.pickEyes());
+const SOFT_MOUTH_KEY='viva_soft_mouth_218';
+try{
+  $('soft-mouth-enabled').checked=localStorage.getItem(SOFT_MOUTH_KEY)!=='false';
+}catch{
+  $('soft-mouth-enabled').checked=true;
+}
+motion.setSoftMouthEnabled($('soft-mouth-enabled').checked);
+$('soft-mouth-enabled').addEventListener('change',e=>{
+  motion.setSoftMouthEnabled(e.target.checked);
+  try{localStorage.setItem(SOFT_MOUTH_KEY,String(e.target.checked))}catch{}
+  $('photo-motion-status').textContent=e.target.checked
+    ?'Bordi delle labbra più morbidi: sfumatura locale attiva.'
+    :'Sfumatura disattivata: disegno classico VIVA AI 2.17 ripristinato.';
+});
 const FLUID_LIPS_KEY='viva_fluid_lips_217';
 try{
   $('fluid-lips-enabled').checked=localStorage.getItem(FLUID_LIPS_KEY)!=='false';
