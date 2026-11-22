@@ -153,3 +153,35 @@
   0%,32%,67%,100%{opacity:0}
   42%,50%{opacity:.42}
 }
+
+/* VIVA AI 1.5 — micro-espressioni facoltative delle sopracciglia
+   Le patch utilizzano ritagli della fotografia, non una maschera di colore. */
+.photo-frame .brow-motion-layer{
+  position:absolute;inset:0;z-index:9;pointer-events:none;overflow:hidden;
+  transform-origin:50% 50%;
+}
+.photo-frame .brow-motion-layer[hidden]{display:none!important}
+.brow-motion-patch{
+  position:absolute;pointer-events:none;
+  transform:translate(-50%,-50%) rotate(var(--brow-tilt,0rad));
+  background-size:100% 100%;background-repeat:no-repeat;
+  opacity:.94;will-change:transform;
+  border-radius:50% 50% 36% 36%;
+  -webkit-mask-image:radial-gradient(ellipse at center,#000 56%,transparent 97%);
+  mask-image:radial-gradient(ellipse at center,#000 56%,transparent 97%);
+}
+.brow-motion-patch.expression-now{
+  animation:viva-brow-expression 1350ms ease-in-out 1 both;
+}
+@keyframes viva-brow-expression{
+  0%,100%{transform:translate(-50%,-50%) rotate(var(--brow-tilt,0rad)) scale(1)}
+  26%,42%{transform:translate(-50%,calc(-50% + var(--brow-shift,-1px))) rotate(var(--brow-tilt,0rad)) scaleY(1.025)}
+  65%{transform:translate(-50%,-50%) rotate(var(--brow-tilt,0rad)) scale(1)}
+}
+.photo-frame #avatar-canvas,.photo-frame .eye-lid-layer{
+  transform-origin:50% 50%;
+}
+/* Il test resta utilizzabile in modalità a movimento ridotto, ma senza animazioni automatiche. */
+@media(prefers-reduced-motion:reduce){
+  .brow-motion-patch.expression-now{animation-duration:250ms}
+}
