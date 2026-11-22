@@ -1,4 +1,4 @@
-import { PhotoAvatarMotion } from './photo-avatar.js?v=147';
+import { PhotoAvatarMotion } from './photo-avatar.js?v=150';
 /* VIVA AI: interfaccia pubblica, nessuna API key privata nel browser. */
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -440,6 +440,8 @@ $('motion-test').addEventListener('click',()=>motion.testMotion());
 $('blink-test').addEventListener('click',()=>motion.testBlink());
 $('eyes-pick').addEventListener('click',()=>motion.pickEyes());
 $('blink-enabled').addEventListener('change',e=>motion.setBlinkEnabled(e.target.checked));
+$('expression-enabled').addEventListener('change',e=>motion.setExpressionEnabled(e.target.checked));
+$('expression-test').addEventListener('click',()=>motion.testExpression());
 $('head-enabled').addEventListener('change',e=>motion.setHeadEnabled(e.target.checked));
 $('motion-pick').addEventListener('click',()=>motion.pickMouth());
 $('motion-intensity').addEventListener('input',e=>{
